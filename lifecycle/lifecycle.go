@@ -17,8 +17,9 @@ var ErrAlreadyStarted = errors.New("lifecycle: manager already started")
 
 type Config struct{ ShutdownTimeout time.Duration } // zero defaults to 10s
 type entry struct {
-	name string
-	fn   func(context.Context) error
+	name   string
+	fn     func(context.Context) error
+	budget time.Duration
 }
 
 // Manager is configured before Run and may only be run once. Registered tasks
@@ -28,6 +29,7 @@ type Manager struct {
 	started bool
 	tasks   []entry
 	hooks   []entry
+	quiesce []entry
 	timeout time.Duration
 }
 
@@ -42,16 +44,24 @@ func New(cfg Config) (*Manager, error) {
 }
 
 // Add registers a long-running task. Any task's return, even nil, initiates shutdown.
-func (m *Manager) Add(name string, task func(context.Context) error) error {
-	return m.register(name, task, false)
+func (m *Manager) Add(name string, task func(context.Context) error, options ...Option) error {
+	return m.register(name, task, "task", options...)
 }
 
 // OnStop registers cleanup, called in reverse registration order after tasks exit.
-func (m *Manager) OnStop(name string, hook func(context.Context) error) error {
-	return m.register(name, hook, true)
+func (m *Manager) OnStop(name string, hook func(context.Context) error, options ...Option) error {
+	return m.register(name, hook, "stop", options...)
 }
 
-func (m *Manager) register(name string, fn func(context.Context) error, hook bool) error {
+type Option func(*entry)
+
+func WithStopTimeout(timeout time.Duration) Option { return func(e *entry) { e.budget = timeout } }
+
+// OnQuiesce stops intake before task cancellation and draining.
+func (m *Manager) OnQuiesce(name string, hook func(context.Context) error, options ...Option) error {
+	return m.register(name, hook, "quiesce", options...)
+}
+func (m *Manager) register(name string, fn func(context.Context) error, phase string, options ...Option) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.started {
@@ -60,13 +70,23 @@ func (m *Manager) register(name string, fn func(context.Context) error, hook boo
 	if name == "" || fn == nil {
 		return errors.New("lifecycle: name and function are required")
 	}
-	for _, e := range append(append([]entry(nil), m.tasks...), m.hooks...) {
+	for _, e := range append(append(append([]entry(nil), m.tasks...), m.hooks...), m.quiesce...) {
 		if e.name == name {
 			return fmt.Errorf("lifecycle: duplicate name %q", name)
 		}
 	}
 	e := entry{name: name, fn: fn}
-	if hook {
+	for _, o := range options {
+		if o != nil {
+			o(&e)
+		}
+	}
+	if e.budget < 0 {
+		return errors.New("lifecycle: negative stop budget")
+	}
+	if phase == "quiesce" {
+		m.quiesce = append(m.quiesce, e)
+	} else if phase == "stop" {
 		m.hooks = append(m.hooks, e)
 	} else {
 		m.tasks = append(m.tasks, e)
@@ -91,7 +111,7 @@ func (m *Manager) Run(ctx context.Context) error {
 	m.started = true
 	tasks, hooks := append([]entry(nil), m.tasks...), append([]entry(nil), m.hooks...)
 	m.mu.Unlock()
-	workCtx, cancel := context.WithCancel(ctx)
+	workCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 	done := make(chan error, len(tasks))
 	started := 0
@@ -99,7 +119,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		for _, task := range tasks {
 			started++
 			go func(e entry) {
-				err := invoke(workCtx, e)
+				err := runTask(workCtx, e)
 				if cancellationOnly(err, workCtx.Err()) {
 					err = nil
 				}
@@ -121,9 +141,12 @@ func (m *Manager) Run(ctx context.Context) error {
 		remaining--
 		collect(err)
 	}
-	cancel()
 	stopCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), m.timeout)
 	defer stop()
+	for i := len(m.quiesce) - 1; i >= 0; i-- {
+		collect(runHook(stopCtx, m.quiesce[i]))
+	}
+	cancel()
 	for remaining > 0 {
 		select {
 		case err := <-done:
@@ -137,16 +160,7 @@ func (m *Manager) Run(ctx context.Context) error {
 		if stopCtx.Err() != nil {
 			return errors.Join(append(failures, ErrShutdownTimeout)...)
 		}
-		result := make(chan error, 1)
-		go func(e entry) { result <- invoke(stopCtx, e) }(hooks[i])
-		select {
-		case err := <-result:
-			if err != nil {
-				failures = append(failures, err)
-			}
-		case <-stopCtx.Done():
-			return errors.Join(append(failures, ErrShutdownTimeout)...)
-		}
+		collect(runHook(stopCtx, hooks[i]))
 	}
 	if stopCtx.Err() != nil {
 		failures = append(failures, ErrShutdownTimeout)
@@ -202,4 +216,45 @@ func invoke(ctx context.Context, e entry) (err error) {
 		return fmt.Errorf("lifecycle: %s: %w", e.name, err)
 	}
 	return nil
+}
+
+// Budgets bound waiting, not goroutine execution; tasks must honor cancellation.
+func runTask(ctx context.Context, e entry) error {
+	if e.budget == 0 {
+		return invoke(ctx, e)
+	}
+	result := make(chan error, 1)
+	go func() { result <- invoke(ctx, e) }()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+	}
+	timer := time.NewTimer(e.budget)
+	defer timer.Stop()
+	select {
+	case err := <-result:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("lifecycle: %s: %w", e.name, ErrShutdownTimeout)
+	}
+}
+func runHook(ctx context.Context, e entry) error {
+	hookCtx := ctx
+	cancel := func() {}
+	if e.budget > 0 {
+		hookCtx, cancel = context.WithTimeout(ctx, e.budget)
+	}
+	defer cancel()
+	if hookCtx.Err() != nil {
+		return ErrShutdownTimeout
+	}
+	result := make(chan error, 1)
+	go func() { result <- invoke(hookCtx, e) }()
+	select {
+	case err := <-result:
+		return err
+	case <-hookCtx.Done():
+		return fmt.Errorf("lifecycle: %s: %w", e.name, ErrShutdownTimeout)
+	}
 }

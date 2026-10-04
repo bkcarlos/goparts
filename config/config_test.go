@@ -166,7 +166,7 @@ func TestInvalidTagsAndOverflow(t *testing.T) {
 		},
 		func() error {
 			_, err := Load[struct {
-				N *int `default:"1"`
+				N *int `default:"invalid"`
 			}](Options{})
 			return err
 		},

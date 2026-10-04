@@ -112,3 +112,15 @@ GOWORK=off go vet ./...
 ```
 
 YAML 示例文件见 [config.yaml](examples/basic/config.yaml)。原有 JSON 文件仍可通过 `go run ./examples/basic -config /path/to/config.json` 加载。安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
+
+### 分层与校验
+
+加载顺序：default 标签 → `Defaults` (`fs.FS`，例如 embed.FS) 的
+`DefaultsFile` → `Files`（按顺序）→ `File` → 环境变量 → 校验。
+多层覆盖同名标量，保留未覆盖的结构体字段和 map 项；slice 整体替换。
+每层仍严格拒绝未知字段。`LoadRegistry[T](fs, "projects/*.yaml", opts)`
+按匹配文件分别加载，以完整 FS 路径为 key 返回注册表。
+支持可选 `*T`：没有数据的字段保持 nil；default/env 可初始化指针，
+递归类型不会无限分配。已存在的嵌套结构体会执行自己的 Validate。
+字符串支持 `url:"true"`（HTTP/S，无 userinfo）、`host:"true"`（主机名/IP）、
+`oneof:"dev,prod"`、`regex:"^[a-z]+$"`。业务跨字段规则继续使用 Validate。

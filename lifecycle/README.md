@@ -61,3 +61,13 @@ GOWORK=off go vet ./...
 ```
 
 安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
+
+### 停机阶段与预算
+
+`OnQuiesce(name, fn)` 在任务取消之前逆序执行，用于停止新请求/新任务入队；
+随后取消任务、等待退出，最后逆序执行 OnStop 关闭资源。
+`Add` / `OnQuiesce` / `OnStop` 均可传 `WithStopTimeout(d)`；任务预算从
+任务 context 被取消开始计算，hook 预算从调用开始计算，总 ShutdownTimeout 仍优先。
+单个 hook 超时会记录错误并继续后续清理，总预算耗尽则结束等待。
+Go 无法强杀 goroutine：超时返回后不配合 context 的函数仍可能运行，
+业务必须避免其继续使用已清理资源。任务 context 保留父级值，取消由停机阶段控制。
