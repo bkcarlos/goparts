@@ -1,0 +1,85 @@
+# HTTP Client 独立模块
+
+[返回模块总览](../README.md) · [统一错误与上报](../apperror/README.md)
+
+模块名 `github.com/bkcarlos/goparts/httpclient`，Go 1.21+，仅依赖标准库。提供连接复用、超时、响应大小限制和 JSON 请求。
+
+## 使用
+
+```go
+client, err := httpclient.New(httpclient.Config{
+    Timeout: 5 * time.Second,
+    MaxResponseBytes: 2 * 1024 * 1024,
+    Headers: http.Header{"Authorization": []string{"Bearer " + token}},
+})
+if err != nil { return err }
+defer client.CloseIdleConnections()
+
+var result struct { ID int `json:"id"` }
+resp, err := client.DoJSON(ctx, http.MethodGet, endpoint, nil, &result)
+if err != nil { return err }
+_ = resp.StatusCode
+```
+
+完整可运行示例：[examples/basic/main.go](examples/basic/main.go)，使用本地测试服务，不访问外部接口。
+
+## 行为
+
+### 配置参数
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Timeout` | 10 秒 | 包含响应体读取；`0` 使用默认值，负数无效 |
+| `MaxResponseBytes` | 4 MiB | 单次完整响应上限，含错误响应；`0` 使用默认值，负数及 `MaxInt64` 无效 |
+| `Headers` | 空 | 初始化时复制，单次请求可覆盖同名请求头 |
+| `Transport` | 模块创建的 Transport | 可注入自定义实现，需并发安全 |
+
+`DefaultMaxResponseBytes` 仅用于未配置时的默认值，调用方可以覆盖：
+
+```go
+client, err := httpclient.New(httpclient.Config{
+    MaxResponseBytes: 16 * 1024 * 1024, // 16 MiB
+})
+```
+
+不填 `MaxResponseBytes` 或传 `0` 仍是 4 MiB，不表示无限制。`Config{}` 可以直接创建使用默认配置的客户端。
+
+### 请求与响应
+
+- 默认超时 10 秒，包含读取响应体的时间；调用方 Context 更早取消时立即响应取消。
+- 默认最大响应体 4 MiB，包括错误响应。超过限制返回 `ErrResponseTooLarge`，只保留响应元数据，不返回截断内容。
+- 默认创建自己的 HTTP Transport，配置代理、连接池、HTTP/2 和空闲连接超时；可通过 `Config.Transport` 替换。
+- `Config.Headers` 在初始化时复制，单次请求的 `Request.Headers` 覆盖同名默认头。发送期间调用方不要并发修改请求 Header 或 Body。
+- `Do` 读取完响应后关闭响应体。成功返回 `Response`；非 2xx 返回 `Response` 和 `*StatusError`，可通过返回的 Body 读取服务端错误详情。
+- `DoJSON` 编码非 nil input，解码成功且非空的响应到 output。output 为 nil 时不解码；否则必须是非 nil 指针。空响应保留 output 原值。
+- 不跟随重定向，3xx 同样作为状态错误返回；需要跳转时由调用方检查目标再请求。
+- 没有应用层自动重试，标准 Transport 自带的连接重试语义仍适用。若组合独立 `retry` 模块，调用方必须判断幂等性，并为每次尝试重新创建请求体。
+- 网络错误移除标准库附加的完整 URL，错误消息不附带响应内容。自定义 Transport/JSON 解码器产生的错误文本由其自身负责。
+- Client 可并发使用；注入的 Transport 也必须支持并发。
+
+需要单次请求头、原始字节或 Reader 请求体时使用：
+
+```go
+resp, err := client.Do(ctx, httpclient.Request{
+    Method: http.MethodPost,
+    URL: endpoint,
+    Headers: http.Header{"Content-Type": []string{"application/json"}},
+    Body: strings.NewReader(`{"name":"demo"}`),
+})
+```
+
+错误可用 `errors.As(err, &statusErr)` 和 `errors.Is(err, context.DeadlineExceeded)` 等判断。`StatusError` 仅包含 HTTP 状态码；API 的业务状态码由调用方解析。
+
+`StatusError` 已实现统一错误接口，编码为 `httpclient.http_status`，上报字段包含 `http_status`。可直接传给 `apperror.Reporter.Capture`；`ErrResponseTooLarge` 等普通哨兵错误可在业务边界通过 `apperror.Wrap` 增加业务编码。适配方式见 [apperror](../apperror/README.md#已有模块适配)。
+
+本模块将响应读入内存，适合常规 API 调用。大文件下载、SSE 等流式响应应直接使用 `net/http`。自定义 Transport 若忽略请求 Context，模块无法强行中断它。
+
+## 独立运行
+
+```sh
+GOWORK=off go run ./examples/basic
+GOWORK=off go test -race -cover ./...
+GOWORK=off go vet ./...
+```
+
+在本模块目录执行。`CloseIdleConnections` 会作用于注入的共享 Transport，请在合适的资源生命周期结束时调用。安装与本地联调方式见[接入指南](../README.md#接入业务项目)。

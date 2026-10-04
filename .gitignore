@@ -1,0 +1,19 @@
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build and test artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage/
+go.work.sum
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/

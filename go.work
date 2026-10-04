@@ -1,0 +1,12 @@
+go 1.21
+
+use (
+	./apperror
+	./config
+	./feishu
+	./httpclient
+	./lifecycle
+	./llm
+	./logger
+	./retry
+)
