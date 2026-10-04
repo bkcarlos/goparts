@@ -4,13 +4,14 @@
 
 模块名：`github.com/bkcarlos/goparts/feishu`，Go 1.21+，仅依赖标准库。该目录包含独立的 `go.mod`、实现、测试和示例，可以单独复制到其他仓库使用。
 
-当前支持三类独立能力：
+当前支持四类独立能力：
 
 - 根包 `github.com/bkcarlos/goparts/feishu`：群自定义机器人 Webhook 通知。
 - 子包 [`github.com/bkcarlos/goparts/feishu/user`](user/README.md)：设备授权登录、用户 token 刷新、可选加密会话存储，以及用户身份的 docx 读取、创建、追加和编辑。参考官方 CLI 的授权协议独立实现，没有完整引入 CLI。
 - 子包 [`github.com/bkcarlos/goparts/feishu/card`](card/README.md)：JSON 2.0 卡片构建、模板、应用机器人群聊/私聊发送、回复与更新、LLM 流式卡片和 HTTP 按钮回调校验。
+- 子包 [`github.com/bkcarlos/goparts/feishu/attachment`](attachment/README.md)：聊天附件上传和发送、云空间文件上传、文档素材上传，组合用户身份完成 docx 附件关联。
 
-用户授权需要应用 App ID / App Secret 与用户同意，Webhook 地址本身不能登录或操作文档。卡片发送和更新使用应用机器人身份；文件上传和通用事件订阅尚未实现。
+用户授权需要应用 App ID / App Secret 与用户同意，Webhook 地址本身不能登录、上传附件或操作文档。卡片发送和更新使用应用机器人身份；附件通过 TokenProvider 显式选择应用或用户身份。通用事件订阅尚未实现。
 
 ## 使用
 
@@ -93,7 +94,7 @@ default:
 
 ## 统一错误上报
 
-根包的 `APIError` / `HTTPError`，以及 user、card 子包的结构化错误，都可直接传给 `apperror.Reporter.Capture`。统一编码与字段见 [错误类型适配表](../apperror/README.md#已有模块适配)。原有的 `errors.Is/As` 和错误类型保持可用。
+根包的 `APIError` / `HTTPError`，以及 user、card、attachment 子包的结构化错误，都可直接传给 `apperror.Reporter.Capture`。统一编码与字段见 [错误类型适配表](../apperror/README.md#已有模块适配)。原有的 `errors.Is/As` 和错误类型保持可用。
 
 ## 独立运行与验证
 
@@ -112,6 +113,8 @@ GOWORK=off go vet ./...
 用户登录与文档操作的本地示例：`GOWORK=off go run ./examples/userdocs_mock`。真实登录入口和应用权限准备见 [用户身份接入文档](user/README.md)。
 
 卡片构建、流式更新和回调的本地示例：`GOWORK=off go run ./examples/cards_mock`。接口使用与权限准备见 [卡片接入文档](card/README.md)。
+
+附件上传、发送和文档关联的本地示例：`GOWORK=off go run ./examples/attachments_mock`。接口与大小限制见 [附件接入文档](attachment/README.md)。
 
 安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
 

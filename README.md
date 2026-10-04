@@ -32,9 +32,10 @@
 | 群自定义机器人 Webhook 通知 | `github.com/bkcarlos/goparts/feishu` | `New`、`SendText`、`SendMarkdown`、`Send` | [feishu](feishu/README.md) |
 | 用户授权登录、会话刷新、docx 读写 | `github.com/bkcarlos/goparts/feishu/user` | `New`、`StartLogin`、`CompleteLogin` | [用户身份](feishu/user/README.md) |
 | 卡片构建、发送、回复、更新、按钮回调 | `github.com/bkcarlos/goparts/feishu/card` | `NewCard`、`New`、`Send`、`UpdateText` | [卡片](feishu/card/README.md) |
+| 聊天附件、云空间文件、文档素材上传 | `github.com/bkcarlos/goparts/feishu/attachment` | `New`、`UploadChatPath`、`UploadDrivePath`、`UploadMediaPath` | [附件](feishu/attachment/README.md) |
 | 编码错误、错误链、业务扩展、统一上报 | `github.com/bkcarlos/goparts/apperror` | `New`、`Wrap`、`Describe`、`NewReporter` | [apperror](apperror/README.md) |
 
-`feishu/user` 和 `feishu/card` 是同一个 Feishu module 下的独立子包，使用各自的配置和客户端。模块间通过参数、回调和小接口组合：例如业务加载配置后传给客户端，把 LLM 流交给卡片接口，把错误记录交给日志或通知出口。
+`feishu/user`、`feishu/card` 和 `feishu/attachment` 是同一个 Feishu module 下的独立子包，使用各自的配置和客户端。模块间通过参数、回调和小接口组合：例如业务加载配置后传给客户端，把 LLM 流交给卡片接口，把错误记录交给日志或通知出口。
 
 ## 快速开始
 
@@ -144,7 +145,7 @@ GOWORK=off go mod tidy
 GOWORK=off go run .
 ```
 
-这里 `v0.0.0` 配合本地 `replace` 使用，不代表已经发布的版本。引入飞书时只需配置 `github.com/bkcarlos/goparts/feishu` 这个模块，即可使用其根包、`user` 和 `card` 子包。
+这里 `v0.0.0` 配合本地 `replace` 使用，不代表已经发布的版本。引入飞书时只需配置 `github.com/bkcarlos/goparts/feishu` 这个模块，即可使用其根包、`user`、`card` 和 `attachment` 子包。
 
 ## 配置与默认值
 
@@ -158,6 +159,7 @@ GOWORK=off go run .
 | LLM 单个 SSE 行或事件上限 | 1 MiB | `llm.Config.MaxEventBytes` |
 | 飞书 Webhook 请求超时 | 5 秒 | `feishu.Config.Timeout` |
 | 飞书用户 / 卡片 API 单次请求超时 | 15 秒 | 对应子包的 `Config.Timeout` |
+| 飞书附件操作超时 / 文件上限 / 响应上限 | 2 分钟 / 30 MiB / 2 MiB | `attachment.Config`；云空间和素材接口仍限制 20 MiB |
 | 重试次数 / 初始等待 / 最大等待 | 3 次 / 100ms / 5 秒 | `retry.Config`；未配置 `RetryIf` 时不重试 |
 | 生命周期关闭预算 | 10 秒 | `lifecycle.Config.ShutdownTimeout` |
 | 上报完整错误文本 | 不包含 | `apperror.ReporterConfig.IncludeDetail` |
@@ -206,6 +208,7 @@ HTTP、LLM 和飞书的结构化错误已适配这些接口，可以直接传给
 | 群通知 | `feishu` | Webhook URL，可选签名密钥 | 文本、图片、富文本、通知卡片 |
 | 用户文档操作 | `feishu/user` | App ID / Secret + 用户设备授权 | 该用户已有权限范围内的 docx 读写 |
 | 应用卡片交互 | `feishu/card` | App ID / Secret，获取 tenant token | 群聊/私聊卡片、更新、流式输出、HTTP 回调 |
+| 附件上传 | `feishu/attachment` | 注入应用或用户的 AccessToken 方法 | 聊天上传和发送、云空间上传、文档素材上传 |
 
 Webhook 地址不能替代用户登录。用户授权模块借鉴官方 CLI 的协议流程独立实现，没有完整引入 CLI；卡片模块也不依赖官方大 SDK。
 
@@ -230,6 +233,7 @@ LLM 模块可配置兼容协议的 BaseURL 和模型名；对接 DeepSeek、通�
 | [LLM 流式对话](llm/examples/stream/main.go) | `GOWORK=off go run ./examples/stream` | 本地模拟 SSE |
 | [飞书用户文档](feishu/examples/userdocs_mock/main.go) | `GOWORK=off go run ./examples/userdocs_mock` | 本地模拟授权、刷新和文档读写 |
 | [飞书卡片](feishu/examples/cards_mock/main.go) | `GOWORK=off go run ./examples/cards_mock` | 本地模拟发送、更新和回调 |
+| [飞书附件](feishu/examples/attachments_mock/main.go) | `GOWORK=off go run ./examples/attachments_mock` | 本地模拟聊天上传/发送、用户云空间上传/文档附件关联 |
 
 真实调用入口需要显式配置并执行：
 
@@ -280,13 +284,14 @@ goparts/
 │   ├── go.mod
 │   ├── user/     # 用户授权和文档子包，共用 feishu 的 go.mod
 │   ├── card/     # 卡片子包，共用 feishu 的 go.mod
+│   ├── attachment/ # 附件上传子包，共用 feishu 的 go.mod
 │   └── examples/
 ├── tests/        # workspace 跨模块集成测试
 ├── go.work
 └── Makefile
 ```
 
-每个模块分别管理版本。在当前多模块仓库中发布时，标签需包含模块目录前缀，例如 `logger/v0.1.0`、`feishu/v0.1.0`；Feishu 的 user/card 子包随 feishu 模块一起发布。当前只推送源码，尚未创建发布标签。`go.work` 和本地 `replace` 不会替代已发布模块的依赖声明。
+每个模块分别管理版本。在当前多模块仓库中发布时，标签需包含模块目录前缀，例如 `logger/v0.1.0`、`feishu/v0.1.0`；Feishu 的 user/card/attachment 子包随 feishu 模块一起发布。当前只推送源码，尚未创建发布标签。`go.work` 和本地 `replace` 不会替代已发布模块的依赖声明。
 
 ## 常见问题
 

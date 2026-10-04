@@ -74,6 +74,12 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("feishu/card: API failed (HTTP %d, code %d)", e.StatusCode, e.Code)
 }
 
+// AccessToken returns a cached/refreshed application tenant token, for composing
+// other Feishu clients such as attachment.Client. Do not log the returned token.
+func (c *Client) AccessToken(ctx context.Context) (string, error) {
+	return c.accessToken(ctx)
+}
+
 func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if ctx == nil {
 		return "", errors.New("feishu/card: context is required")

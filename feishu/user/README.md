@@ -115,8 +115,9 @@ _, err = client.UpdateText(ctx, doc.ID, added.Children[0].ID(), "更新后的内
 | ListBlocks | 分页读取完整块 JSON，支持固定文档版本 |
 | AppendBlocks / AppendText | 在文档或父块末尾追加内容，每次 1～50 块 |
 | UpdateText | 替换指定文本类块的元素，包括原有行内样式 |
+| CreateFileBlock / ReplaceFile | 创建文件块、关联已上传的文档素材 token |
 
-传入 docx 的 document_id，不是整条 URL。Wiki 链接需要先在业务侧解析成对应文档 ID，本模块没有封装 Wiki、Sheets、Bitable、图片上传、Markdown 转换或文档删除。
+传入 docx 的 document_id，不是整条 URL。Wiki 链接需要先在业务侧解析成对应文档 ID，本子包没有封装 Wiki、Sheets、Bitable 业务接口、Markdown 转换或文档删除。文件和图片素材上传见独立的 [attachment 子包](../attachment/README.md)，其中包含 docx 附件的完整组合示例。
 
 `Block` 保留完整 JSON 结构，`Paragraph` 是简单段落构造器；复杂富文本通过 AppendBlocks 按官方协议传入。获取分页时建议先 GetDocument 固定 RevisionID，然后使用 PageToken 继续遍历，直到 HasMore 为 false；库每次只取一页。
 
