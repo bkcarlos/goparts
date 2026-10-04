@@ -1,5 +1,7 @@
 # ratelimit：令牌桶与熔断器
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [HTTP 中间件](../middleware/README.md) · [重试](../retry/README.md)
 
 Go 1.21+，独立标准库模块。令牌桶限制调用频率；熔断器在连续故障后暂时拒绝调用。

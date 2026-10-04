@@ -1,5 +1,7 @@
 # AppError 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [日志与错误组合示例](../README.md#接入业务项目) · [可运行示例](examples/basic/main.go)
 
 模块名 `github.com/bkcarlos/goparts/apperror`，Go 1.21+，仅依赖标准库。支持稳定错误码、简短说明、原始错误链、结构化字段，以及可注入的统一上报出口。可单独复制使用。

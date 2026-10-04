@@ -1,5 +1,7 @@
 # ssh：SSH 命令与 SFTP 传输
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [版本更新](../version/README.md)
 
 独立模块，**Go 1.26+**。使用 golang.org/x/crypto/ssh 与 pkg/sftp；业务通过本模块的 Client 操作。

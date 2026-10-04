@@ -8,8 +8,16 @@
 
 仓库：[bkcarlos/goparts](https://github.com/bkcarlos/goparts)，采用 [MIT](LICENSE)。模块发布使用 `<module>/v0.1.0` 标签；安装时写 `github.com/bkcarlos/goparts/<module>@v0.1.0`。发布状态与验收见 [FEATURES.md](FEATURES.md)。
 
+## 给 AI 编程助手使用
+
+从 [AI_GUIDE.md](AI_GUIDE.md) 查找能力、核对版本，再按需读取模块文档。每个独立 module
+内也提供 AI_GUIDE.md，可从已安装模块的源码目录读取。go get 不会自动把它加入模型上下文，
+需要在使用方工具的项目规则或提示词中明确引用；总指南包含可复制的上下文模板。
+这些指南在 v0.1.0 之后加入，旧标签不变；旧版本请查其 README、GoDoc 和源码。
+
 ## 导航
 
+- [AI 能力索引与上下文模板](AI_GUIDE.md)
 - [模块选型](#模块选型)
 - [按场景组合](#按场景组合)
 - [快速开始](#快速开始)

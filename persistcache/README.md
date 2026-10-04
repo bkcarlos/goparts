@@ -1,5 +1,7 @@
 # persistcache：持久化更新时间
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [业务值缓存](../cache/README.md)
 
 Go 1.21+，保存 key 的最后更新时间，适合 CLI 同步、扫描、抓取等任务。

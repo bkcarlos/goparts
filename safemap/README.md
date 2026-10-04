@@ -1,5 +1,7 @@
 # safemap：并发 Map 与有序 Map
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [带 TTL 的缓存](../cache/README.md)
 
 Go 1.21+，提供 `SafeMap[K,V]` 与 `OrderedSafeMap[K,V]`；零值可用，key 必须 comparable。

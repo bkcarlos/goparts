@@ -1,5 +1,7 @@
 # metrics：可替换的指标接口
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [HTTP 钩子](../httpclient/README.md) · [工作池事件](../workerpool/README.md)
 
 Go 1.21+。根包只定义指标接口和 Nop，可选 `metrics/otel` 连接 OpenTelemetry Meter。

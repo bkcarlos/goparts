@@ -1,5 +1,7 @@
 # Config 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [HTTP 配置](../httpclient/README.md#配置参数) · [统一错误与上报](../apperror/README.md)
 
 模块名 `github.com/bkcarlos/goparts/config`，Go 1.21+，支持 JSON / YAML 结构体配置加载与启动校验。YAML 使用 [go.yaml.in/yaml/v3](https://pkg.go.dev/go.yaml.in/yaml/v3)；依赖仅属于本模块，其他 goparts 模块无需引入。

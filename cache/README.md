@@ -1,5 +1,7 @@
 # cache：TTL 缓存与并发加载合并
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [Redis 适配器](redis/README.md) · [更新时间缓存](../persistcache/README.md)
 
 独立模块，Go 1.21+。适合缓存 API 结果、配置快照等字节数据；对象的 JSON 编解码由业务决定。

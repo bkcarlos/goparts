@@ -1,5 +1,7 @@
 # Feishu 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [用户登录与文档](user/README.md) · [卡片操作](card/README.md) · [统一错误与上报](../apperror/README.md)
 
 模块名：`github.com/bkcarlos/goparts/feishu`，Go 1.21+。`events` 子包使用 Gorilla WebSocket 和 Protobuf wire 编码，`user` 的口令密钥派生使用 PBKDF2 依赖；其余当前子包使用标准库。该目录包含独立的 `go.mod`、实现、测试和示例，可以单独复制到其他仓库使用。

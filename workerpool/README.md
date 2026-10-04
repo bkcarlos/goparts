@@ -1,5 +1,7 @@
 # workerpool：有界任务池与按 key 保序
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [退出管理](../lifecycle/README.md) · [流式卡片](../feishu/card/README.md)
 
 适合后台任务、批量请求以及同一卡片的连续更新。独立模块，Go 1.21+，标准库实现。

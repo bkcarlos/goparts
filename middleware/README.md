@@ -1,5 +1,7 @@
 # middleware：标准 HTTP 中间件
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [限流与熔断](../ratelimit/README.md) · [日志](../logger/README.md)
 
 独立 Go 1.21 模块，采用 `func(http.Handler) http.Handler`，可以直接用于 net/http。

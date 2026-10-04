@@ -1,5 +1,7 @@
 # filetree：遍历文件树与组合过滤
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [归档工具](../utils/README.md) · [目录上传](../storage/README.md#目录上传与兼容校验)
 
 Go 1.21+，基于标准库 WalkDir。适合扫描待归档、上传或同步的本地文件。

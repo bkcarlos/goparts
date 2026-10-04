@@ -1,5 +1,7 @@
 # 通用对象存储
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 独立 module：`github.com/bkcarlos/goparts/storage`，Go 1.21+。业务依赖 `storage.Client` 或 `storage.Backend`，供应商通过适配器接入。第一批实现 **阿里云 OSS**；未来 S3、MinIO、COS 等实现同一接口即可替换，当前尚未提供这些适配器。
 
 根包仅使用标准库；`storage/aliyun` 使用阿里云官方 Go SDK v2 v1.6.0 处理签名、协议和分片上传，业务 API 不暴露 SDK 类型。

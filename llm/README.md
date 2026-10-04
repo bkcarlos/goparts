@@ -1,5 +1,7 @@
 # LLM 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [统一错误与上报](../apperror/README.md) · [飞书流式卡片](../feishu/card/README.md#llm-流式卡片)
 
 模块名 `github.com/bkcarlos/goparts/llm`，Go 1.21+。根包仅依赖标准库；可选 `llm/chat` 子包使用 JSON Schema 校验依赖，独立于其他公共模块。

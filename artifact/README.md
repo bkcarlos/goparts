@@ -1,5 +1,7 @@
 # artifact：制品目录与校验下载
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [自行发布版本](../version/README.md) · [通用下载](../download/README.md)
 
 Go 1.21+，适合从已有制品平台查询包并下载。PackageManager 可注入任意 Backend；

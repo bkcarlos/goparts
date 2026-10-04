@@ -1,5 +1,7 @@
 # 通用流式下载
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 独立 module：`github.com/bkcarlos/goparts/download`，Go 1.21+，只使用标准库。数据源实现 `Source.Open(ctx)`，下载器统一处理流式落盘、大小限制、SHA-256、进度和发布目标文件；HTTP 或对象存储都可接入。
 
 ## HTTP 下载

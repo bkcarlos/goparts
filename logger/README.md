@@ -1,5 +1,7 @@
 # Logger 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [统一错误与上报](../apperror/README.md)
 
 模块名：`github.com/bkcarlos/goparts/logger`，Go 1.21+，仅依赖标准库。该目录包含独立的 `go.mod`、实现、测试和示例，可以单独复制到其他仓库使用。

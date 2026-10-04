@@ -1,5 +1,7 @@
 # cache/redis：可选 Redis 适配器
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [基础缓存](../README.md) · [返回总览](../../README.md)
 
 这是有独立 go.mod 的嵌套模块，要求 **Go 1.26+**。基础 cache 模块不强制引入 Redis。

@@ -1,5 +1,7 @@
 # Retry 独立模块
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回模块总览](../README.md) · [HTTP 请求](../httpclient/README.md) · [编码错误](../apperror/README.md)
 
 模块名 `github.com/bkcarlos/goparts/retry`，Go 1.21+，仅依赖标准库。提供有界次数、指数退避、随机抖动和 Context 取消。

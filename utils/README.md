@@ -1,5 +1,7 @@
 # utils：格式化、归档与磁盘空间
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 [返回总览](../README.md) · [文件树](../filetree/README.md) · [文件下载](../download/README.md)
 
 Go 1.21+，独立标准库模块。函数按需调用，没有全局初始化。

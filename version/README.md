@@ -1,5 +1,7 @@
 # version
 
+[LLM 使用指南](AI_GUIDE.md)：按当前版本查找能力、源码入口和调用约定。
+
 供应商无关的 Publisher / Updater。StorageProvider 仅需原子 Put 和返回 owned
 reader 的 Open；不存在映射为 version.ErrNotFound。StorageAdapter 通过函数注入，
 可接 storage.Client（阿里云或其他 Backend），不强制依赖对象存储 SDK。

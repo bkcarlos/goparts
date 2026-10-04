@@ -22,7 +22,9 @@ make vuln
 并发测试优先用通道同步和有界等待；错误路径应验证返回错误、未执行的副作用、原数据保留和资源清理。
 避免只检查“没有报错”，或通过固定 Sleep 猜测任务执行顺序。新增的 fuzz 种子随普通测试运行，
 CI robustness 任务另执行 `make stress` 和 `make fuzz`；fuzz 失败输入应保留为回归语料。
-加新模块时同时更新 Makefile、go.work、CI matrix、README 和 FEATURES。
+加新模块时同时更新 Makefile、go.work、CI matrix、README 和 FEATURES，
+并补充根目录 AI_GUIDE.md 索引、模块内 AI_GUIDE.md 和模块 README 的指南入口。
+AI 指南不替代实际 API；修改接口、错误语义或资源所有权时同步调用约定，核对所引用符号与文件。
 公共结构体用可选新增字段维持兼容；破坏性改变需主版本升级及迁移说明。
 
 多模块发布顺序：实现与文档 → race/cover/vet/集成/漏洞检查 → 提交推送 → 每模块标记版本。
