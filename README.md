@@ -2,7 +2,7 @@
 
 面向 Go 服务的公共组件集合：日志、配置、HTTP、重试、生命周期、LLM、飞书和统一错误处理。**每个模块有独立的 `go.mod`，按需引用、分别初始化**，不需要创建全局 SDK 实例。
 
-当前要求 **Go 1.21+**，八个模块的生产代码互不导入。`config` 为支持 YAML 引入 `go.yaml.in/yaml/v3`，其余模块仅依赖标准库。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
+当前要求 **Go 1.21+**，八个模块的生产代码互不导入。`config` 使用 `go.yaml.in/yaml/v3` 支持 YAML；`feishu/events` 使用 Gorilla WebSocket 和 Protobuf wire 编码支持长连接；其他模块仅使用标准库。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
 
 仓库：[bkcarlos/goparts](https://github.com/bkcarlos/goparts)。各模块使用 `github.com/bkcarlos/goparts/<模块名>` 导入路径；当前尚未创建版本标签。
 
@@ -33,9 +33,10 @@
 | 用户授权登录、会话刷新、docx 读写 | `github.com/bkcarlos/goparts/feishu/user` | `New`、`StartLogin`、`CompleteLogin` | [用户身份](feishu/user/README.md) |
 | 卡片构建、发送、回复、更新、按钮回调 | `github.com/bkcarlos/goparts/feishu/card` | `NewCard`、`New`、`Send`、`UpdateText` | [卡片](feishu/card/README.md) |
 | 聊天附件、云空间文件、文档素材上传 | `github.com/bkcarlos/goparts/feishu/attachment` | `New`、`UploadChatPath`、`UploadDrivePath`、`UploadMediaPath` | [附件](feishu/attachment/README.md) |
+| 长连接消息、卡片和机器人入群事件 | `github.com/bkcarlos/goparts/feishu/events` | `NewDispatcher`、`New`、`Run` | [长连接](feishu/events/README.md) |
 | 编码错误、错误链、业务扩展、统一上报 | `github.com/bkcarlos/goparts/apperror` | `New`、`Wrap`、`Describe`、`NewReporter` | [apperror](apperror/README.md) |
 
-`feishu/user`、`feishu/card` 和 `feishu/attachment` 是同一个 Feishu module 下的独立子包，使用各自的配置和客户端。模块间通过参数、回调和小接口组合：例如业务加载配置后传给客户端，把 LLM 流交给卡片接口，把错误记录交给日志或通知出口。
+`feishu/user`、`feishu/card`、`feishu/attachment` 和 `feishu/events` 是同一个 Feishu module 下的独立子包，使用各自的配置和客户端。模块间通过参数、回调和小接口组合：例如业务加载配置后传给客户端，把 LLM 流交给卡片接口，把错误记录交给日志或通知出口。
 
 ## 快速开始
 
@@ -145,7 +146,7 @@ GOWORK=off go mod tidy
 GOWORK=off go run .
 ```
 
-这里 `v0.0.0` 配合本地 `replace` 使用，不代表已经发布的版本。引入飞书时只需配置 `github.com/bkcarlos/goparts/feishu` 这个模块，即可使用其根包、`user`、`card` 和 `attachment` 子包。
+这里 `v0.0.0` 配合本地 `replace` 使用，不代表已经发布的版本。引入飞书时只需配置 `github.com/bkcarlos/goparts/feishu` 这个模块，即可使用其根包、`user`、`card`、`attachment` 和 `events` 子包。
 
 ## 配置与默认值
 
@@ -209,6 +210,7 @@ HTTP、LLM 和飞书的结构化错误已适配这些接口，可以直接传给
 | 用户文档操作 | `feishu/user` | App ID / Secret + 用户设备授权 | 该用户已有权限范围内的 docx 读写 |
 | 应用卡片交互 | `feishu/card` | App ID / Secret，获取 tenant token | 群聊/私聊卡片、更新、流式输出、HTTP 回调 |
 | 附件上传 | `feishu/attachment` | 注入应用或用户的 AccessToken 方法 | 聊天上传和发送、云空间上传、文档素材上传 |
+| 长连接事件 | `feishu/events` | App ID / Secret，开发者后台订阅事件 | 消息、卡片交互、机器人入群及通用 schema 2.0 事件 |
 
 Webhook 地址不能替代用户登录。用户授权模块借鉴官方 CLI 的协议流程独立实现，没有完整引入 CLI；卡片模块也不依赖官方大 SDK。
 
@@ -241,6 +243,7 @@ LLM 模块可配置兼容协议的 BaseURL 和模型名；对接 DeepSeek、通�
 | --- | --- | --- |
 | [飞书 Webhook](feishu/examples/basic/main.go) | `FEISHU_WEBHOOK_URL`，可选 `FEISHU_SECRET` | `go run ./examples/basic`；未配置 URL 时跳过，配置后发送真实群通知 |
 | [飞书用户文档](feishu/examples/userdocs/main.go) | `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_TOKEN_KEY`，对应应用权限 | `go run ./examples/userdocs login`；写入需显式执行 create / append / update，详见子包文档 |
+| [飞书长连接](feishu/examples/events/main.go) | `FEISHU_APP_ID`、`FEISHU_APP_SECRET`，后台事件订阅和权限 | `go run ./examples/events`；未配置凭据时跳过，配置后真实连接并应答事件 |
 | [LLM 服务商](llm/examples/live/main.go) | `LLM_MODEL`，对应端点的 `LLM_BASE_URL` / `LLM_API_KEY` | `go run ./examples/live -prompt '你好'`；会发出真实模型请求，可能计费 |
 
 环境变量由这些示例读取，业务使用 SDK 时仍通过 Config 传参。
@@ -285,13 +288,14 @@ goparts/
 │   ├── user/     # 用户授权和文档子包，共用 feishu 的 go.mod
 │   ├── card/     # 卡片子包，共用 feishu 的 go.mod
 │   ├── attachment/ # 附件上传子包，共用 feishu 的 go.mod
+│   ├── events/   # 长连接事件子包，共用 feishu 的 go.mod
 │   └── examples/
 ├── tests/        # workspace 跨模块集成测试
 ├── go.work
 └── Makefile
 ```
 
-每个模块分别管理版本。在当前多模块仓库中发布时，标签需包含模块目录前缀，例如 `logger/v0.1.0`、`feishu/v0.1.0`；Feishu 的 user/card/attachment 子包随 feishu 模块一起发布。当前只推送源码，尚未创建发布标签。`go.work` 和本地 `replace` 不会替代已发布模块的依赖声明。
+每个模块分别管理版本。在当前多模块仓库中发布时，标签需包含模块目录前缀，例如 `logger/v0.1.0`、`feishu/v0.1.0`；Feishu 的 user/card/attachment/events 子包随 feishu 模块一起发布。当前只推送源码，尚未创建发布标签。`go.work` 和本地 `replace` 不会替代已发布模块的依赖声明。
 
 ## 常见问题
 

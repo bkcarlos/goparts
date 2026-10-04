@@ -112,7 +112,7 @@ GOWORK=off go run ./examples/cards_mock
 
 ## HTTP 回调
 
-在飞书应用的回调配置中订阅 `card.action.trigger`，配置公网 HTTPS 回调地址和对应的 Verification Token / Encrypt Key。当前封装支持 HTTP 回调和 URL 验证，不包含长连接或旧版卡片回调协议。
+在飞书应用的回调配置中订阅 `card.action.trigger`，配置公网 HTTPS 回调地址和对应的 Verification Token / Encrypt Key。本子包提供 HTTP 回调和 URL 验证；无需公网地址时可使用独立的 [events 长连接子包](../events/README.md)，通过 `OnCardAction` 复用这里的回调类型。当前不支持旧版卡片回调协议。
 
 ```go
 decoder, err := card.NewCallbackDecoder(card.CallbackConfig{

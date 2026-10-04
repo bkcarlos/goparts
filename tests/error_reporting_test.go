@@ -12,6 +12,7 @@ import (
 	"github.com/bkcarlos/goparts/feishu"
 	"github.com/bkcarlos/goparts/feishu/attachment"
 	"github.com/bkcarlos/goparts/feishu/card"
+	"github.com/bkcarlos/goparts/feishu/events"
 	"github.com/bkcarlos/goparts/feishu/user"
 	"github.com/bkcarlos/goparts/httpclient"
 	"github.com/bkcarlos/goparts/llm"
@@ -29,6 +30,7 @@ func TestModuleErrorsCanBeReportedWithoutConversion(t *testing.T) {
 		{&feishu.HTTPError{StatusCode: 502}, "feishu.http_status", "http_status", "502"},
 		{&card.APIError{StatusCode: 400, Code: 200770, Message: "provider-secret", RequestID: "card-req"}, "feishu.card.api_error", "request_id", "card-req"},
 		{&attachment.APIError{StatusCode: 403, Code: 1061004, Message: "provider-secret", RequestID: "upload-req"}, "feishu.attachment.api_error", "request_id", "upload-req"},
+		{&events.APIError{StatusCode: 403, Code: 403, Message: "provider-secret", RequestID: "ws-req"}, "feishu.events.api_error", "request_id", "ws-req"},
 		{&user.APIError{StatusCode: 403, Code: 999, Message: "provider-secret"}, "feishu.user.api_error", "http_status", "403"},
 		{&user.OAuthError{StatusCode: 400, ErrorCode: "invalid_grant", Description: "provider-secret"}, "feishu.user.oauth_error", "oauth_error", "invalid_grant"},
 		{&user.ScopeError{Missing: []string{"docx:document"}}, "feishu.user.missing_scope", "missing_scopes", "docx:document"},

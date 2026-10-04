@@ -185,6 +185,7 @@ sink := apperror.SinkFunc(func(ctx context.Context, record apperror.Record) erro
 | `feishu.HTTPError` | `feishu.http_status` |
 | `card.APIError` | `feishu.card.api_error` |
 | `attachment.APIError` | `feishu.attachment.api_error` |
+| `events.APIError` | `feishu.events.api_error` |
 | `user.APIError` | `feishu.user.api_error` |
 | `user.OAuthError` | `feishu.user.oauth_error` |
 | `user.ScopeError` | `feishu.user.missing_scope` |
