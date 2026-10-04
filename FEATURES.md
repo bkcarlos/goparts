@@ -24,5 +24,14 @@
 | 制品库通用客户端和 BOS 兼容 | 通用客户端已实现、测试通过；BOS 专有协议按用户确认跳过 |
 | SafeMap/OrderedMap、文件树过滤、格式化/压缩/磁盘空间 | 已实现，测试通过 |
 | logger/retry/errx 下游旧 API 精确兼容 | 精确兼容按用户确认跳过；通用入口已实现 |
-| CI、CHANGELOG、CONTRIBUTING、模块版本标签 | CI/文档已实现；等待远程验收与标签发布 |
+| CI、CHANGELOG、CONTRIBUTING、模块版本标签 | 已实现；23 模块 CI 与集成检查通过，v0.1.0 按模块发布 |
 | LICENSE | MIT，已添加 |
+
+## 验证与排除项
+
+- 实现提交 `2794348` 的 [GitHub Actions](https://github.com/bkcarlos/goparts/actions/runs/37215012725) 全部通过：23 模块 race/cover、vet、govulncheck、Windows 编译及独立集成任务。
+- 本地 macOS/arm64 完整 `make check` 通过，最后的小修复另做针对性回归；发布记录见 [VALIDATION.md](VALIDATION.md)。
+- 漏洞扫描结论为未发现可达漏洞；依赖模块可能含未导入包的公告，不等于整份依赖树没有任何公告。
+- 明确跳过：BOS 专有协议、无法获得源码的 toolkits/common 精确接口兼容。通用 artifact 和便捷 API 已实现。
+- 对象存储首批仅阿里云，保留 Backend/RangeSource；真实飞书/LLM/OSS/生产 SSH 联调未执行。
+- 跨进程文件刷新锁、注入式分布式缓存/去重与本地模拟测试已有覆盖；具体 Redis 集群、高可用和生产锁实现仍需按部署方式验收。
