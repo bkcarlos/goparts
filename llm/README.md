@@ -2,9 +2,22 @@
 
 [返回模块总览](../README.md) · [统一错误与上报](../apperror/README.md) · [飞书流式卡片](../feishu/card/README.md#llm-流式卡片)
 
-模块名 `github.com/bkcarlos/goparts/llm`，Go 1.21+，仅依赖标准库，独立于其他公共模块。
+模块名 `github.com/bkcarlos/goparts/llm`，Go 1.21+。根包仅依赖标准库；可选 `llm/chat` 子包使用 JSON Schema 校验依赖，独立于其他公共模块。
 
 面向 OpenAI 兼容协议提供普通对话、SSE 流式对话、函数工具调用的数据结构、JSON 输出参数和 Embedding 向量接口。服务地址、API Key 和模型名称由业务传入，不绑定具体模型或服务商。
+
+## 选择接口
+
+| 需求 | API | 说明 |
+| --- | --- | --- |
+| 常见兼容端点对话 | Chat / ChatStream | `/chat/completions`；流式结束标记 `[DONE]` |
+| 向量 | Embeddings | `/embeddings`；显式选择 embedding 模型 |
+| Responses 协议 | Responses / ResponsesStream | `/responses`；兼容 Chat 的服务商未必支持 |
+| 多轮裁剪、工具校验、聚合输出 | [llm/chat](chat/README.md) | 可选应用层；不自动持久化或执行任意工具 |
+
+```sh
+go get github.com/bkcarlos/goparts/llm@v0.1.0
+```
 
 ## 创建客户端
 
@@ -102,7 +115,7 @@ if err != nil { return err }
 calls := response.Choices[0].Message.ToolCalls
 ```
 
-模块只传递工具定义和模型返回的调用数据，不执行工具。业务应按函数名白名单选择实现，解析并校验 `Function.Arguments`，执行后构造下一轮消息：
+根包只传递工具定义和模型返回的调用数据，不执行工具；可选 `llm/chat.ToolRegistry` 可校验参数并分发到业务显式注册的处理器。业务应按函数名白名单选择实现，解析并校验 `Function.Arguments`，执行后构造下一轮消息：
 
 ```go
 request.Messages = append(request.Messages, response.Choices[0].Message)
@@ -189,7 +202,7 @@ GOWORK=off go run ./examples/live -stream -prompt '你好'
 
 这两个命令会向配置服务发送真实请求，可能产生费用。本次实现仅通过本地模拟服务验证，尚未做服务商真实联调。安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
 
-协议参考：[Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[流式事件](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events)、[工具调用](https://developers.openai.com/api/docs/guides/function-calling)、[Embedding](https://developers.openai.com/api/reference/resources/embeddings/methods/create)。此模块面向已选定的兼容协议；OpenAI Responses API 和 Anthropic 原生接口不在当前范围内。
+协议参考：[Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[流式事件](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events)、[工具调用](https://developers.openai.com/api/docs/guides/function-calling)、[Embedding](https://developers.openai.com/api/reference/resources/embeddings/methods/create)。此模块面向已选定的兼容协议；已提供独立的 Responses 接口（见下文）；Anthropic 原生接口不在当前范围内。
 
 ### Responses API
 
@@ -213,3 +226,29 @@ ToolRegistry.Register 编译 JSON Schema（禁止外部引用），Dispatch 先�
 Accumulator 聚合全文，按字符数/定时间隔串行 flush；Close 发送尾部并停止计时器，
 回调错误停止后续写入。SequenceAllocator[K].Next 为每个 key 分配递增序号，
 搭配 workerpool.Stream 保证卡片更新发送顺序；仅在无在途调用后 Forget。
+
+
+完整的 Responses 普通调用函数：
+
+```go
+package example
+
+import (
+    "context"
+
+    "github.com/bkcarlos/goparts/llm"
+)
+
+func Respond(ctx context.Context, client *llm.Client, prompt, previousID string) (string, string, error) {
+    response, err := client.Responses(ctx, llm.ResponsesRequest{
+        Input: prompt,
+        PreviousResponseID: previousID,
+    })
+    if err != nil { return "", "", err }
+    return response.Text(), response.ID, nil
+}
+```
+
+client 需事先配置 Model；previousID 为空表示不关联前次响应。是否支持服务端关联历史由端点决定，
+它与本地 chat.Session 是两种状态管理方式，不能假定其中一种会自动同步另一种。
+[llm/chat 接入文档](chat/README.md) 提供会话、工具处理和流式聚合的完整函数示例。

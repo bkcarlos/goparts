@@ -69,7 +69,7 @@ defer reader.Close()
 | PartSize / Parallelism | 8 MiB / 3；范围 100 KiB～1 GiB / 1～64 |
 | CleanupTimeout | 分片失败后尝试清理，默认 10 秒；使用独立于已取消上传 Context 的清理预算 |
 
-零值使用默认值，负值无效。为满足最多 10000 个分片，分片大小可能自动增大；超出当前 1 GiB × 10000 的适配器容量则拒绝。Reader 上传由 SDK 缓冲分片，内存随 PartSize 和并发数增长，不缓存整份文件。上传中断后尝试 Abort，清理失败会与原错误一起返回；远端不完整分片仍需 Bucket 生命周期规则兜底。当前不保留断点上传检查点，也不封装目录批量上传。
+零值使用默认值，负值无效。为满足最多 10000 个分片，分片大小可能自动增大；超出当前 1 GiB × 10000 的适配器容量则拒绝。Reader 上传由 SDK 缓冲分片，内存随 PartSize 和并发数增长，不缓存整份文件。上传中断后尝试 Abort，清理失败会与原错误一起返回；远端不完整分片仍需 Bucket 生命周期规则兜底。当前不保留断点上传检查点；目录并发上传由 Client.UploadDirectory 提供，见下文。
 
 SDK 应用层重试设为一次，重定向禁用；业务按幂等性决定重试并重新打开输入流。Get 返回后必须保持 Context 有效直到读取结束。临时签名 URL 的实际有效期同时受 STS 凭据有效期限制。
 
@@ -110,3 +110,30 @@ GOWORK=off go vet ./...
 拒绝符号链接/特殊文件。返回成功上传列表和组合错误；失败不回滚已上传对象。
 OnProgress 在不同文件工作协程中调用，业务回调须自行区分和同步。
 `ComputeFileMD5(path)` 用于旧制品校验；安全完整性优先使用 SHA-256，不把 OSS ETag 当 MD5。
+
+
+完整的目录上传函数（假定 Client 已完成供应商初始化）：
+
+```go
+package example
+
+import (
+    "context"
+    "io/fs"
+    "strings"
+
+    "github.com/bkcarlos/goparts/storage"
+)
+
+func UploadBuild(ctx context.Context, client *storage.Client, root string) ([]storage.Object, error) {
+    return client.UploadDirectory(ctx, "releases/build-001", root, storage.DirectoryOptions{
+        Workers: 4,
+        Filter: func(relative string, entry fs.DirEntry) bool {
+            return !strings.HasPrefix(entry.Name(), ".")
+        },
+    })
+}
+```
+
+此处过滤隐藏目录时会剪掉整个子树；Workers=0 默认 4，上限 64。调用失败仍需检查返回的成功对象列表，
+这些对象不会自动删除；重试前由业务决定是否允许覆盖。返回顺序受并发调度影响，不是源路径排序。

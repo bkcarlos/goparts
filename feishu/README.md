@@ -2,9 +2,9 @@
 
 [返回模块总览](../README.md) · [用户登录与文档](user/README.md) · [卡片操作](card/README.md) · [统一错误与上报](../apperror/README.md)
 
-模块名：`github.com/bkcarlos/goparts/feishu`，Go 1.21+。`events` 子包使用 Gorilla WebSocket 和 Protobuf wire 编码，其余子包仅使用标准库。该目录包含独立的 `go.mod`、实现、测试和示例，可以单独复制到其他仓库使用。
+模块名：`github.com/bkcarlos/goparts/feishu`，Go 1.21+。`events` 子包使用 Gorilla WebSocket 和 Protobuf wire 编码，`user` 的口令密钥派生使用 PBKDF2 依赖；其余当前子包使用标准库。该目录包含独立的 `go.mod`、实现、测试和示例，可以单独复制到其他仓库使用。
 
-当前支持五类独立能力：
+常用入口按场景划分如下（业务 API 见文末）：
 
 - 根包 `github.com/bkcarlos/goparts/feishu`：群自定义机器人 Webhook 通知。
 - 子包 [`github.com/bkcarlos/goparts/feishu/user`](user/README.md)：设备授权登录、用户 token 刷新、可选加密会话存储，以及用户身份的 docx 读取、创建、追加和编辑。参考官方 CLI 的授权协议独立实现，没有完整引入 CLI。
@@ -132,12 +132,67 @@ GOWORK=off go vet ./...
 字段类型和复杂筛选使用自己的类型或 RawMessage，不引入飞书完整 SDK。
 Drive/media 上传继续使用 attachment 包。接口写入只尝试一次，不隐式重放。
 
-```go
-identity, _ := user.NewManager(userConfig, multiStore, appClient.AccessToken)
-base, _ := bitable.New(bitable.Config{TokenProvider: identity.AccessToken})
-ctx := user.AsUser(context.Background(), "ou_example")
-page, err := base.ListTables(ctx, "app_token", bitable.Page{PageSize:100})
+先安装整个 Feishu module，子包不分别发布：
+
+```sh
+go get github.com/bkcarlos/goparts/feishu@v0.1.0
 ```
+
+下面的函数从 Wiki 链接解析多维表格，并显式遍历表分页。tokenProvider 可传
+`user.Client.AccessToken`、`card.Client.AccessToken`，或多用户 Manager.AccessToken；
+使用 Manager 时在传入 Context 中用 user.AsUser 选择用户，不能省略身份后假定自动回退。
+
+```go
+package example
+
+import (
+    "context"
+    "errors"
+
+    "github.com/bkcarlos/goparts/feishu/bitable"
+    "github.com/bkcarlos/goparts/feishu/wiki"
+)
+
+func TablesFromWiki(ctx context.Context, tokenProvider func(context.Context) (string, error),
+    link string) ([]bitable.Table, error) {
+    resolver, err := wiki.New(wiki.Config{TokenProvider: tokenProvider})
+    if err != nil { return nil, err }
+    appToken, err := resolver.ResolveBitable(ctx, link)
+    if err != nil { return nil, err }
+    client, err := bitable.New(bitable.Config{TokenProvider: tokenProvider})
+    if err != nil { return nil, err }
+    var tables []bitable.Table
+    cursor := ""
+    seen := map[string]bool{}
+    for {
+        page, err := client.ListTables(ctx, appToken, bitable.Page{
+            PageSize: 100, PageToken: cursor,
+        })
+        if err != nil { return nil, err }
+        tables = append(tables, page.Items...)
+        if !page.HasMore { return tables, nil }
+        if page.PageToken == "" || seen[page.PageToken] {
+            return nil, errors.New("non-advancing Feishu page token")
+        }
+        cursor = page.PageToken
+        seen[cursor] = true
+    }
+}
+```
+
+| 子包 | 常用方法 | 输入要点 |
+| --- | --- | --- |
+| bitable | ListTables / CreateTable / UpdateTable / DeleteTable | app token；操作已有表还需 table ID |
+| bitable | Search / BatchCreate / BatchUpdate | batch 1..500 条，字段不能为空；更新需 record ID |
+| bitable | ListFields / CreateField / UpdateField / DeleteField | 创建/更新提供字段名和正整数类型 |
+| wiki | GetNode / Resolve / ResolveBitable | token 或 HTTPS Wiki URL；ResolveBitable 检查节点确为多维表格 |
+| contact | BatchGetID | emails 和 mobiles 各最多 50，至少有一项；ID 类型为 open_id/user_id/union_id |
+| card/legacy | New / Div / Action / Button / JSON | 构建 JSON 1.0 卡片；不自动转换成 JSON 2.0 |
+| dedup | NewMemory / Do | 同 key 合并执行并重放成功结果，失败可重试；TTL 和容量必须正数 |
+
+Bitable PageSize 为 0..500；0 不发送 page_size。分页未自动耗尽，应用应保留 PageToken 原值。
+TokenProvider 每次请求显式获取身份凭据，返回错误后不会悄悄换成应用身份。
+业务 API 默认超时 15 秒、响应上限 4 MiB，可通过 Config 覆盖；Context 更早的取消仍生效。
 
 Scopes 和资源授权由调用者在飞书后台开通。Wiki URL 只提取 token，不向 URL 主机发凭据。
 官方协议参考：[Bitable](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/search)、
