@@ -110,3 +110,13 @@ GOWORK=off go vet ./...
 ```
 
 在本模块目录执行。`CloseIdleConnections` 会作用于注入的共享 Transport，请在合适的资源生命周期结束时调用。安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
+
+### 观测与受控预览
+
+`Config.Hooks.OnRequest` / `OnResponse` 同步接收独立快照，包含方法、耗时、
+状态码、响应字节数和失败标记；不读取请求 Body、不记录查询参数。
+头部只保留 Content-Type/Length、Accept、Retry-After、X-Request-Id。
+钩子可对接日志和指标，需支持并发且及时返回。
+默认 `StatusError` 不含 Body。若配置 `ErrorBodyBytes`，必须同时传入
+`RedactBody func([]byte) []byte`；输入和输出都限长，结果放入 `BodyPreview`，
+不会写入 Error()。截断的原文可能不是完整 JSON，脱敏函数必须对此安全处理。

@@ -9,10 +9,11 @@ import (
 
 // Record is JSON-ready and independent from the original error object.
 type Record struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Fields  Fields `json:"fields,omitempty"`
-	Detail  string `json:"detail,omitempty"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Fields  Fields         `json:"fields,omitempty"`
+	Detail  string         `json:"detail,omitempty"`
+	Attrs   map[string]any `json:"attrs,omitempty"`
 }
 
 type Sink interface {

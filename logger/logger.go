@@ -12,6 +12,7 @@ import (
 // Config configures a logger. Its zero value writes JSON at INFO to stdout.
 // The caller owns Writer and is responsible for closing or flushing it.
 type Config struct {
+	Redact      bool         // masks sensitive keys and Bearer strings when enabled
 	Format      string       // "json" (default) or "text"
 	Level       slog.Leveler // nil means INFO; use *slog.LevelVar for runtime changes
 	Writer      io.Writer
@@ -35,6 +36,9 @@ func New(cfg Config) (*slog.Logger, error) {
 		h = slog.NewTextHandler(w, opts)
 	default:
 		return nil, fmt.Errorf("logger: unsupported format %q", cfg.Format)
+	}
+	if cfg.Redact {
+		h = RedactingHandler(h)
 	}
 	l := slog.New(h)
 	if cfg.Service != "" {

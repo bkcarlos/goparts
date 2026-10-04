@@ -6,10 +6,13 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 )
 
 type Config struct {
+	RandomSource rand.Source                       // optional deterministic source; ownership transfers to Retrier
+	OnAttempt    func(Attempt)                     // concurrent calls require a safe callback
 	MaxAttempts  int                               // includes the initial attempt; zero defaults to 3
 	InitialDelay time.Duration                     // zero defaults to 100ms
 	MaxDelay     time.Duration                     // zero defaults to 5s
@@ -20,7 +23,16 @@ type Config struct {
 }
 
 // Retrier is immutable and safe to reuse concurrently if callbacks are also safe.
-type Retrier struct{ cfg Config }
+type Attempt struct {
+	Number   int
+	Duration time.Duration
+	Err      error
+}
+type Retrier struct {
+	cfg      Config
+	randomMu sync.Mutex
+	random   *rand.Rand
+}
 
 func New(cfg Config) (*Retrier, error) {
 	if cfg.MaxAttempts == 0 {
@@ -38,7 +50,11 @@ func New(cfg Config) (*Retrier, error) {
 	if cfg.MaxAttempts < 1 || cfg.InitialDelay < 0 || cfg.MaxDelay < cfg.InitialDelay || cfg.Multiplier < 1 || math.IsNaN(cfg.Multiplier) || math.IsInf(cfg.Multiplier, 0) || cfg.Jitter < 0 || cfg.Jitter > 1 || math.IsNaN(cfg.Jitter) {
 		return nil, errors.New("retry: invalid attempts, delay, multiplier or jitter")
 	}
-	return &Retrier{cfg: cfg}, nil
+	r := &Retrier{cfg: cfg}
+	if cfg.RandomSource != nil {
+		r.random = rand.New(cfg.RandomSource)
+	}
+	return r, nil
 }
 
 // Do runs operation at most MaxAttempts times and returns the last operation
@@ -53,7 +69,11 @@ func (r *Retrier) Do(ctx context.Context, operation func(context.Context) error)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		start := time.Now()
 		err := operation(ctx)
+		if r.cfg.OnAttempt != nil {
+			r.cfg.OnAttempt(Attempt{Number: attempt, Duration: time.Since(start), Err: err})
+		}
 		if err == nil {
 			return nil
 		}
@@ -84,7 +104,13 @@ func (r *Retrier) jitter(delay time.Duration) time.Duration {
 	if r.cfg.Jitter == 0 {
 		return delay
 	}
-	factor := 1 - r.cfg.Jitter + 2*r.cfg.Jitter*rand.Float64()
+	random := rand.Float64()
+	if r.random != nil {
+		r.randomMu.Lock()
+		random = r.random.Float64()
+		r.randomMu.Unlock()
+	}
+	factor := 1 - r.cfg.Jitter + 2*r.cfg.Jitter*random
 	return capDuration(float64(delay)*factor, r.cfg.MaxDelay)
 }
 

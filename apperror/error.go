@@ -31,6 +31,7 @@ type Base struct {
 	message string
 	cause   error
 	fields  Fields
+	attrs   map[string]any
 }
 
 type Option func(*Base)
@@ -91,6 +92,7 @@ func (e *Base) Is(target error) bool {
 func (e *Base) With(options ...Option) *Base {
 	copy := *e
 	copy.fields = clone(e.fields)
+	copy.attrs = cloneAttrs(e.attrs)
 	for _, option := range options {
 		if option != nil {
 			option(&copy)
@@ -108,6 +110,13 @@ func (e *Base) Wrap(cause error, options ...Option) error {
 	}
 	copy := *e
 	copy.cause = cause
+	copy.attrs = cloneAttrs(Describe(cause).Attrs)
+	if copy.attrs == nil {
+		copy.attrs = map[string]any{}
+	}
+	for k, v := range cloneAttrs(e.attrs) {
+		copy.attrs[k] = v
+	}
 	copy.fields = merge(Describe(cause).Fields, e.fields)
 	for _, option := range options {
 		if option != nil {
@@ -153,6 +162,9 @@ func Describe(err error) *Record {
 		}
 		if provider, ok := coded.(FieldProvider); ok {
 			r.Fields = clone(provider.ErrorFields())
+		}
+		if provider, ok := coded.(AttrProvider); ok {
+			r.Attrs = cloneAttrs(provider.ErrorAttrs())
 		}
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		r.Code, r.Message = CodeDeadlineExceeded, "operation deadline exceeded"

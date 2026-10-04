@@ -64,3 +64,16 @@ GOWORK=off go vet ./...
 本模块可独立引入；安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
 
 参考：[Go slog 文档](https://pkg.go.dev/log/slog)。
+
+### 脱敏、轮转与入口
+
+`Config{Redact:true}` 对消息中的 Bearer 字符串和嵌套属性中的凭据键脱敏，
+包括 With、Group、map/slice。也可用 `RedactingHandler` 包装已有 slog Handler。
+脱敏无法识别任意业务字段的秘密，敏感数据仍应在写日志之前排除。
+`NewRotatingWriter(FileConfig{Path:"app.log", MaxBytes:10<<20, Backups:3})`
+提供进程内并发安全的轮转（单条超过上限返回错误，不支持多进程共享同一文件）。
+通过 `Config.Writer` 注入，调用方负责 Close。
+`InitGlobalLogger`、`CloseGlobalLogger` 和 Debug/Info/Warn/Error 是可选全局入口；
+仅显式传入的 closer 转移所有权。`ToLevel` 解析 slog 级别。
+`NewTraceWriter(w).Record(ctx, fields...)` 输出脱敏 JSON 行，可在 HTTP 钩子中调用；
+默认不捕获请求体。历史 toolkits 的精确签名需要其源码，当前不声称兼容。

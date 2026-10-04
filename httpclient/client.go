@@ -21,10 +21,13 @@ const DefaultMaxResponseBytes int64 = 4 * 1024 * 1024
 var ErrResponseTooLarge = errors.New("httpclient: response exceeds size limit")
 
 type Config struct {
-	Timeout          time.Duration     // zero defaults to 10s, including response body reads
-	MaxResponseBytes int64             // zero defaults to 4 MiB
-	Headers          http.Header       // copied at construction; request headers override these
-	Transport        http.RoundTripper // optional; must be safe for concurrent requests
+	Hooks            Hooks
+	ErrorBodyBytes   int                 // opt-in preview size; requires RedactBody
+	RedactBody       func([]byte) []byte // called on a copy; output is bounded again
+	Timeout          time.Duration       // zero defaults to 10s, including response body reads
+	MaxResponseBytes int64               // zero defaults to 4 MiB
+	Headers          http.Header         // copied at construction; request headers override these
+	Transport        http.RoundTripper   // optional; must be safe for concurrent requests
 }
 
 // Client is safe for concurrent use. It does not follow redirects or implement
@@ -33,6 +36,9 @@ type Client struct {
 	http             *http.Client
 	headers          http.Header
 	maxResponseBytes int64
+	hooks            Hooks
+	errorBodyBytes   int
+	redactBody       func([]byte) []byte
 }
 
 type Request struct {
@@ -49,9 +55,10 @@ type Response struct {
 }
 
 type StatusError struct {
-	StatusCode int
-	Method     string
-	Headers    http.Header // independent copy; may contain sensitive server values
+	BodyPreview []byte // opt-in, never included in Error()
+	StatusCode  int
+	Method      string
+	Headers     http.Header // independent copy; may contain sensitive server values
 }
 
 func (e *StatusError) Error() string {
@@ -59,6 +66,9 @@ func (e *StatusError) Error() string {
 }
 
 func New(cfg Config) (*Client, error) {
+	if cfg.ErrorBodyBytes < 0 || cfg.ErrorBodyBytes > 0 && cfg.RedactBody == nil {
+		return nil, errors.New("httpclient: body preview requires a redactor and nonnegative limit")
+	}
 	if cfg.Timeout < 0 || cfg.MaxResponseBytes < 0 || cfg.MaxResponseBytes == int64(^uint64(0)>>1) {
 		return nil, errors.New("httpclient: invalid timeout or response size limit")
 	}
@@ -85,6 +95,7 @@ func New(cfg Config) (*Client, error) {
 		http:             &http.Client{Timeout: cfg.Timeout, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		headers:          cloneHeaders(cfg.Headers),
 		maxResponseBytes: cfg.MaxResponseBytes,
+		hooks:            cfg.Hooks, errorBodyBytes: cfg.ErrorBodyBytes, redactBody: cfg.RedactBody,
 	}, nil
 }
 
@@ -100,7 +111,7 @@ func cloneHeaders(source http.Header) http.Header {
 // Do buffers a bounded response and always closes the response body. On non-2xx,
 // it returns both the response and a *StatusError. On oversized/read failures,
 // the returned response has metadata but no partial body.
-func (c *Client) Do(ctx context.Context, input Request) (*Response, error) {
+func (c *Client) Do(ctx context.Context, input Request) (response *Response, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("httpclient: context is required")
 	}
@@ -116,6 +127,21 @@ func (c *Client) Do(ctx context.Context, input Request) (*Response, error) {
 	for key, values := range cloneHeaders(input.Headers) {
 		req.Header[key] = values
 	}
+	start := time.Now()
+	if c.hooks.OnRequest != nil {
+		c.hooks.OnRequest(ctx, RequestEvent{Method: req.Method, Host: u.Host, Path: u.EscapedPath(), Headers: safeHeaders(req.Header)})
+	}
+	defer func() {
+		if c.hooks.OnResponse != nil {
+			event := ResponseEvent{Method: req.Method, Duration: time.Since(start), Failed: resultErr != nil}
+			if response != nil {
+				event.StatusCode = response.StatusCode
+				event.Bytes = int64(len(response.Body))
+				event.Headers = safeHeaders(response.Headers)
+			}
+			c.hooks.OnResponse(ctx, event)
+		}
+	}()
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("httpclient: request failed: %w", withoutURL(err))
@@ -139,6 +165,11 @@ func (c *Client) Do(ctx context.Context, input Request) (*Response, error) {
 			return result, errors.Join(statusErr, ErrResponseTooLarge)
 		}
 		return result, ErrResponseTooLarge
+	}
+	if statusErr != nil && c.errorBodyBytes > 0 {
+		n := min(len(data), c.errorBodyBytes)
+		preview := c.redactBody(append([]byte(nil), data[:n]...))
+		statusErr.(*StatusError).BodyPreview = append([]byte(nil), preview[:min(len(preview), c.errorBodyBytes)]...)
 	}
 	result.Body = data
 	return result, statusErr

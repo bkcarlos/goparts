@@ -61,3 +61,11 @@ GOWORK=off go vet ./...
 ```
 
 安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
+
+### 便捷入口与观测
+
+`DefaultConfig` 默认不自动重试；`NetworkConfig` 选择临时网络错误；
+`ReadOnlyHTTPConfig` 增加 408/429/502/503/504，匹配结构化 `HTTPStatusCode() int`。
+仅用于允许重复执行的操作。`Retry` / `RetryWithContext` 是一次性便捷入口。
+`RandomSource` 可注入 `rand.NewSource(seed)` 做确定性测试，所有权交给 Retrier，
+内部串行访问；`OnAttempt` 同步报告每次调用的次数、耗时和错误，用于指标。

@@ -206,3 +206,13 @@ GOWORK=off go vet ./...
 示例只输出本地日志，不发送外部通知。根目录 `make check` 还会运行跨模块集成测试，验证原有错误可直接上报、包装后仍可恢复原类型，且默认记录不包含上游原始错误文案。
 
 安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
+
+### 注册与组合
+
+`NewRegistry` / `Register(Definition)` 集中定义 Code、Message、Guidance 和
+`Mapping{HTTP, Exit}`；`registry.New(code)` 生成可复用错误定义。
+`registry.HTTPStatus(err)` / `ExitCode(err)` 遍历包装链，未注册错误回退 500/1，
+成功返回 200/0。全局版本使用 `RegisterMapping`，各业务也可持有自己的 Registry。
+`WithAttrs(slog.Attr...)` 保存 JSON 可序列化的结构化属性快照；`Describe` 返回独立副本。
+`DescribeAll(errors.Join(...))` 分别报告各分支；外层已有编码时由外层归类。
+属性和 guidance 属于可上报内容，不应放入密钥或用户隐私。
