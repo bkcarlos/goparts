@@ -25,6 +25,7 @@ l.Info("订单创建成功", "order_id", 1001)
 | `Level` | INFO | 接收 `slog.Leveler`；传 `*slog.LevelVar` 支持动态调整 |
 | `Writer` | `os.Stdout` | 输出由调用方负责关闭和刷新 |
 | `AddSource` | `false` | 是否记录调用位置 |
+| `Redact` | `false` | 开启消息 Bearer 与常见凭据字段脱敏；不保证识别所有业务秘密 |
 | `Service` / `Environment` | 空 | 非空时附加为固定日志字段 |
 
 `New` 返回 `*slog.Logger`，不修改 `slog.Default()`。
@@ -44,7 +45,7 @@ log.With("module", "payment").DebugContext(ctx, "开始支付", "order_id", 1001
 - 默认 JSON、INFO、标准输出。使用标准 `slog` 的 `With`、`WithGroup` 和 `*Context` 方法。
 - `logger.WithContext(ctx, log)` 绑定基础日志器，`logger.WithFields` 派生带字段的 Context，不修改父 Context。
 - `logger.FromContext` 找不到绑定日志器时返回 `slog.Default()`。需要请求字段时从该 Context 获取日志器，仅调用基础日志器的 `InfoContext` 不会自动注入字段。
-- `Writer` 由调用者管理关闭/刷新。文件轮转、采样、脱敏尚未实现；不要直接输出密钥或完整个人信息。
+- `Writer` 由调用者管理关闭/刷新。可注入 RotatingWriter 并开启 Redact；当前没有日志采样。不要直接输出密钥或完整个人信息。
 - 同一个日志器及其派生日志器可并发使用。多个独立日志器共享自定义 Writer 时，调用者应保证 Writer 并发安全。
 
 ## 与错误模块组合
@@ -77,3 +78,33 @@ GOWORK=off go vet ./...
 仅显式传入的 closer 转移所有权。`ToLevel` 解析 slog 级别。
 `NewTraceWriter(w).Record(ctx, fields...)` 输出脱敏 JSON 行，可在 HTTP 钩子中调用；
 默认不捕获请求体。历史 toolkits 的精确签名需要其源码，当前不声称兼容。
+
+
+完整的文件日志初始化函数：
+
+```go
+package example
+
+import (
+    "log/slog"
+
+    "github.com/bkcarlos/goparts/logger"
+)
+
+func NewFileLogger(path string) (*slog.Logger, *logger.RotatingWriter, error) {
+    writer, err := logger.NewRotatingWriter(logger.FileConfig{
+        Path: path, MaxBytes: 10<<20, Backups: 3,
+    })
+    if err != nil { return nil, nil, err }
+    log, err := logger.New(logger.Config{
+        Service: "order-service", Writer: writer, Redact: true,
+    })
+    if err != nil { writer.Close(); return nil, nil, err }
+    return log, writer, nil
+}
+```
+
+成功后调用方保留 writer，在最后一条日志完成后 Close；文件父目录需存在。
+MaxBytes=0 默认 10 MiB，Backups=0 表示轮转后不保留旧文件，负数配置无效。
+`slog.Logger` 的 Info/Error 方法不返回 Writer 错误；若必须感知磁盘失败，应在应用的 Writer 包装层记录失败，
+不能把“调用了 Info”当成可靠持久化确认。

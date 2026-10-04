@@ -6,6 +6,10 @@
 
 ## 使用
 
+```sh
+go get github.com/bkcarlos/goparts/config@v0.1.0
+```
+
 ```go
 type AppConfig struct {
     Name    string        `json:"name" yaml:"name" default:"demo" env:"NAME" required:"true"`
@@ -20,7 +24,7 @@ cfg, err := config.Load[AppConfig](config.Options{
 if err != nil { return err }
 ```
 
-按 **default 标签 → JSON / YAML 文件 → env 标签** 覆盖，然后执行 required 和自定义校验。加载失败返回零值和错误，不返回部分配置。
+按 **default 标签 → DefaultsFile → Files（按顺序）→ File → env 标签** 覆盖，然后执行 required、字段规则和嵌套/顶层自定义校验。加载失败返回零值和错误，不返回部分配置。
 
 完整示例：[examples/basic/main.go](examples/basic/main.go)。它还实现了 `Validate() error` 来校验端口范围和超时。
 
@@ -53,6 +57,8 @@ cfg, err := config.Load[AppConfig](config.Options{
 
 | 项目 | 行为 |
 | --- | --- |
+| `Options.Defaults` / `DefaultsFile` | 可选 fs.FS（含 embed.FS）与默认文件路径，先于外部文件读取 |
+| `Options.Files` | 按给定顺序覆盖多个文件，之后再读取 File；显式指定的文件都必须存在 |
 | `Options.File` | 可选 JSON / YAML 文件；指定后文件必须存在；最大 1 MiB |
 | `Options.Format` | 默认 `FormatAuto`；可显式指定 `FormatJSON` / `FormatYAML` |
 | `Options.EnvPrefix` | 拼接在 env 标签前，例如 `APP_` + `PORT` |
@@ -62,9 +68,9 @@ cfg, err := config.Load[AppConfig](config.Options{
 | `required:"true"` | 拒绝字段零值，包括空字符串、0、false、nil；不适合“false 或 0 也合法”的必填判断 |
 | `Validate() error` | 在 `*T` 上实现，校验跨字段规则，错误链保留 |
 
-默认值和环境变量支持 string、bool、整数、浮点数、`time.Duration`、逗号分隔的字符串切片，以及实现 `encoding.TextUnmarshaler` 的值类型。字符串切片会去除每项首尾空格，空字符串得到空切片。
+默认值和环境变量支持 string、bool、整数、浮点数、`time.Duration`、逗号分隔的字符串切片，以及实现 `encoding.TextUnmarshaler` 的值类型。字符串切片会去除每项首尾空格，空字符串得到空切片；其他类型切片使用 JSON 数组形式，例如整型切片的环境值 `[1,2,3]`。
 
-支持嵌套的值结构体，环境变量名始终由标签显式指定；不会自动把父字段名拼入变量名。`T` 必须是结构体，指针字段上的 default/env 标签不支持，也不遍历嵌套指针。未导出字段跳过。
+支持嵌套值结构体和可选指针字段，default/env 可以按需初始化指针；没有数据的可选指针保持 nil。环境变量名始终由标签显式指定，不会自动拼接父字段名。`T` 本身必须是结构体，未导出字段跳过。
 
 JSON 按标准 `encoding/json` 规则解析，拒绝未知字段、多个 JSON 对象和尾部垃圾。`time.Duration` 在 JSON 中使用整数纳秒，例如 5 秒为 `5000000000`；在 default/env 中使用 `5s`。若需要 JSON 字符串时长，可定义实现相应 JSON/Text 解码接口的类型。
 
