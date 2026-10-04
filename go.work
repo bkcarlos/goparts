@@ -1,6 +1,13 @@
 go 1.21
 
 use (
+ ./cache
+ ./persistcache
+ ./safemap
+ ./filetree
+ ./utils
+ ./metrics
+
  ./middleware
  ./ratelimit
  ./workerpool

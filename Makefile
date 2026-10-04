@@ -1,6 +1,6 @@
 .PHONY: test vet integration check
 
-MODULES := middleware ratelimit workerpool logger feishu config httpclient retry lifecycle llm apperror storage download
+MODULES := cache persistcache safemap filetree utils metrics middleware ratelimit workerpool logger feishu config httpclient retry lifecycle llm apperror storage download
 
 test:
 	@set -e; for module in $(MODULES); do (cd "$$module" && GOWORK=off go test -race -cover ./...); done

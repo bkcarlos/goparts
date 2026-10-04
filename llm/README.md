@@ -190,3 +190,26 @@ GOWORK=off go run ./examples/live -stream -prompt '你好'
 这两个命令会向配置服务发送真实请求，可能产生费用。本次实现仅通过本地模拟服务验证，尚未做服务商真实联调。安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
 
 协议参考：[Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)、[流式事件](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events)、[工具调用](https://developers.openai.com/api/docs/guides/function-calling)、[Embedding](https://developers.openai.com/api/reference/resources/embeddings/methods/create)。此模块面向已选定的兼容协议；OpenAI Responses API 和 Anthropic 原生接口不在当前范围内。
+
+### Responses API
+
+`client.Responses(ctx, ResponsesRequest{Input:"你好", PreviousResponseID:previous})`
+走 `/responses`，模型默认沿用 Config.Model，可指定 Reasoning、Tools、Store、
+MaxOutputTokens 和不覆盖内置字段的 Extra。Input 支持字符串或 []ResponseInput，
+多模态内容可通过 Content / json.RawMessage 表达。
+`ResponsesStream(ctx, req, func(ResponseEvent) error)` 保留完整 Raw 事件，支持
+response.created、response.output_text.delta、工具参数事件及其他未来事件。
+必须收到 response.completed 才成功；失败/incomplete 返回 ResponseStatusError，
+提前 EOF 返回 io.ErrUnexpectedEOF；回调错误和 context 取消会停止读取。
+仅普通 Chat 兼容并不代表供应商也实现 Responses，需要端点本身支持。
+协议参考：[OpenAI 流式响应](https://developers.openai.com/api/docs/guides/streaming-responses)。
+
+### llm/chat 应用层
+
+Session 以完整 user 回合裁剪历史，保留开头 system/developer；支持消息数和自定义
+token 计数预算。不会留下孤立 tool result，最新回合超预算返回 ErrBudget，不修改状态。
+ToolRegistry.Register 编译 JSON Schema（禁止外部引用），Dispatch 先验证参数再调用
+显式注册的 handler，返回 llm.ToolResult；handler 自行检查业务权限，不执行任意模型代码。
+Accumulator 聚合全文，按字符数/定时间隔串行 flush；Close 发送尾部并停止计时器，
+回调错误停止后续写入。SequenceAllocator[K].Next 为每个 key 分配递增序号，
+搭配 workerpool.Stream 保证卡片更新发送顺序；仅在无在途调用后 Forget。
