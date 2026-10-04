@@ -1,6 +1,6 @@
-.PHONY: test vet integration check
+.PHONY: test vet integration check vuln
 
-MODULES := cache persistcache safemap filetree utils metrics middleware ratelimit workerpool logger feishu config httpclient retry lifecycle llm apperror storage download
+MODULES := ssh version artifact cache/redis cache persistcache safemap filetree utils metrics middleware ratelimit workerpool logger feishu config httpclient retry lifecycle llm apperror storage download
 
 test:
 	@set -e; for module in $(MODULES); do (cd "$$module" && GOWORK=off go test -race -cover ./...); done
@@ -12,3 +12,6 @@ integration:
 	go test -race ./tests/*.go
 
 check: test vet integration
+
+vuln:
+	@set -e; for module in $(MODULES); do (cd "$$module" && GOWORK=off govulncheck ./...); done

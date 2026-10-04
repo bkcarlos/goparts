@@ -58,3 +58,18 @@ GOWORK=off go vet ./...
 ```
 
 本地测试覆盖 HTTP/任意 Source、校验、大小、取消、进度错误、竞争写入和失败文件清理；不访问真实云服务。
+
+### Range、自动选择和断点续传
+
+`FetchRanges(ctx, source, destination, RangeOptions{Mode:Auto, Workers:4,
+ChunkBytes:8<<20, Resume:true})` 使用通用 RangeSource，不绑定 OSS。
+HTTPSource 提供 Probe / RangeSupport / OpenRange；GET bytes=0-0 验证实际范围响应。
+Auto 在不支持范围或缺少版本绑定时回退普通 Fetch；Parallel 则返回错误。
+范围操作需要强 ETag 或预期 SHA-256，If-Match 防止跨版本拼接。
+
+续传状态写在 `<destination>.goparts-part/`，包含源指纹、ETag、分片大小和完整分片；
+每片有独立校验和，失败保留完整片，恢复时校验后复用；源/版本/参数变化拒绝继续。
+全部完成后再按完整 SHA-256（如提供）校验并原子发布，成功删除状态目录。
+同一状态目录一次仅一个下载器；崩溃遗留 lock 需确认无存活下载后人工移除。
+目录必须由调用方可信持有。OnProgress 当前报告最终组装的写入进度，回调失败不发布。
+中断发生在分片内部时该片从头下载；不保证保存单片内的字节偏移。

@@ -57,3 +57,20 @@ func TestFileRefreshLockCancellation(t *testing.T) {
 	}
 	unlock2()
 }
+
+func TestPollingCallbackCanCancelWithoutNetwork(t *testing.T) {
+	sentinel := errors.New("stop polling")
+	client, err := New(Config{AppID: "app", AppSecret: "secret", Scopes: []string{"docs:read"}, OnPollTick: func(ctx context.Context, tick PollTick) error {
+		if tick.Attempt != 1 || tick.Interval <= 0 {
+			t.Error(tick)
+		}
+		return sentinel
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.CompleteLogin(context.Background(), DeviceAuthorization{deviceCode: "code", appID: "app", issuer: DefaultAccountsURL, Interval: time.Second, ExpiresAt: time.Now().Add(time.Minute)})
+	if !errors.Is(err, sentinel) {
+		t.Fatal(err)
+	}
+}

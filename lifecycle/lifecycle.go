@@ -95,7 +95,7 @@ func (m *Manager) register(name string, fn func(context.Context) error, phase st
 }
 
 // Run starts tasks concurrently and waits for cancellation or the first task exit.
-// It then cancels all tasks, waits for them, and calls cleanup hooks sequentially.
+// It quiesces intake, cancels tasks, waits for them, then calls cleanup hooks sequentially.
 // A single fresh shutdown deadline covers draining and cleanup. Normal parent
 // cancellation returns nil; task and cleanup failures are joined with errors.Join.
 // On timeout, outstanding goroutines may continue and remaining hooks are skipped.

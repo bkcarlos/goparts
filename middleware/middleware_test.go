@@ -73,3 +73,19 @@ func TestTimeout(t *testing.T) {
 		t.Fatal("empty token")
 	}
 }
+
+func TestAccessLogPreservesFlush(t *testing.T) {
+	w := httptest.NewRecorder()
+	h := AccessLog(nil, nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("Flusher missing")
+		}
+		w.Write([]byte("event\n"))
+		flusher.Flush()
+	}))
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if !w.Flushed {
+		t.Fatal("not flushed")
+	}
+}

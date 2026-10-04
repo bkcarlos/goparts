@@ -61,6 +61,13 @@ type recorder struct {
 }
 
 func (w *recorder) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w *recorder) FlushError() error {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return http.NewResponseController(w.ResponseWriter).Flush()
+}
+func (w *recorder) Flush() { _ = w.FlushError() }
 func (w *recorder) WriteHeader(status int) {
 	if w.status != 0 {
 		return

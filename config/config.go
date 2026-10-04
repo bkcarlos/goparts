@@ -271,7 +271,7 @@ func set(v reflect.Value, s string) error {
 		v.SetFloat(x)
 	case reflect.Slice:
 		if v.Type().Elem().Kind() != reflect.String {
-			return errors.New("only string slices are supported")
+			return json.Unmarshal([]byte(s), v.Addr().Interface())
 		}
 		parts := []string{}
 		if s != "" {

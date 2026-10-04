@@ -102,3 +102,11 @@ GOWORK=off go vet ./...
 ```
 
 本地模拟服务验证签名请求、普通/分片上传、分片失败清理、范围、分页、下载和统一错误；尚未在真实 OSS Bucket 联调。[官方 SDK](https://github.com/aliyun/alibabacloud-oss-go-sdk-v2/tree/v1.6.0)。
+
+### 目录上传与兼容校验
+
+`UploadDirectory(ctx,prefix,root,DirectoryOptions{Workers:4})` 并发上传目录中的
+普通文件，以相对路径组成 key，再应用 Client.BasePath。Filter 可过滤文件或剪枝目录，
+拒绝符号链接/特殊文件。返回成功上传列表和组合错误；失败不回滚已上传对象。
+OnProgress 在不同文件工作协程中调用，业务回调须自行区分和同步。
+`ComputeFileMD5(path)` 用于旧制品校验；安全完整性优先使用 SHA-256，不把 OSS ETag 当 MD5。

@@ -1,0 +1,43 @@
+name: check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  modules:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [apperror, artifact, cache, cache/redis, config, download, feishu, filetree, httpclient, lifecycle, llm, logger, metrics, middleware, persistcache, ratelimit, retry, safemap, ssh, storage, utils, version, workerpool]
+    defaults:
+      run:
+        working-directory: ${{ matrix.module }}
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+          check-latest: true
+      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go vet ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+      - run: govulncheck ./...
+      - run: GOOS=windows GOARCH=amd64 go build ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ strategy.job-index }}
+          path: ${{ matrix.module }}/coverage.out
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: make integration

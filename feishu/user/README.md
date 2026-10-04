@@ -183,3 +183,8 @@ Bitable/Wiki/Contact/attachment。未选择身份或用户令牌失败都不自�
 过期锁，避免双重刷新。分布式部署可注入具有同等事务语义的 Locker。
 `OnPollTick(ctx, PollTick)` 在每轮等待前报告次数、间隔和到期时间，不包含 device code
 或 token；返回错误可终止登录。MaxResponseBytes 可配置，默认 8 MiB。
+
+CLI 也可用 NewPassphraseFileStore(path,passphrase,salt,iterations)，通过
+PBKDF2-HMAC-SHA256 派生 AES-256 key（至少 12 字节口令、16 字节随机 salt、600000 次迭代）。
+salt 必须首次随机生成后持久保存并复用；调用方负责 salt/迭代配置，组件不保存口令。
+这不是对不可访问的 toolkits 存储文件格式的兼容承诺。

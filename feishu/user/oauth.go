@@ -141,10 +141,20 @@ func (c *Client) CompleteLogin(ctx context.Context, auth DeviceAuthorization) (U
 		if err := c.lock(ctx); err != nil {
 			return UserInfo{}, err
 		}
+		unlockRefresh := func() {}
+		if c.refreshLocker != nil {
+			var lockErr error
+			unlockRefresh, lockErr = c.refreshLocker.Lock(ctx)
+			if lockErr != nil {
+				c.unlock()
+				return UserInfo{}, lockErr
+			}
+		}
 		// Commit issued credentials even if the caller cancels at this point.
 		saveCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), c.timeout)
 		err = c.persist(saveCtx, token)
 		stop()
+		unlockRefresh()
 		c.unlock()
 		if err != nil {
 			return UserInfo{}, err
@@ -260,6 +270,13 @@ func (c *Client) Logout(ctx context.Context) error {
 		return err
 	}
 	defer c.unlock()
+	if c.refreshLocker != nil {
+		unlock, err := c.refreshLocker.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	if err := c.store.Delete(ctx); err != nil {
 		return err
 	}
