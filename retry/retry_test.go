@@ -126,3 +126,29 @@ func TestConcurrentReuseAndValidation(t *testing.T) {
 		t.Fatal("nil operation accepted")
 	}
 }
+
+func TestRetryAfterMinimumAndCancellation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Millisecond)
+	defer cancel()
+	calls, delays := 0, 0
+	r := mustNew(t, Config{InitialDelay: time.Nanosecond, MaxDelay: time.Nanosecond, Jitter: 1, RetryIf: func(error) bool { return true }, RetryAfter: func(error) (time.Duration, bool) { delays++; return time.Hour, true }})
+	err := r.Do(ctx, func(context.Context) error { calls++; return errors.New("rate limited") })
+	if !errors.Is(err, context.DeadlineExceeded) || calls != 1 || delays != 1 {
+		t.Fatalf("calls=%d delays=%d err=%v", calls, delays, err)
+	}
+	for _, wait := range []time.Duration{-1, 0} {
+		r := mustNew(t, Config{InitialDelay: time.Nanosecond, RetryIf: func(error) bool { return true }, RetryAfter: func(error) (time.Duration, bool) { return wait, true }})
+		attempts := 0
+		if err := r.Do(context.Background(), func(context.Context) error {
+			attempts++
+			if attempts == 2 {
+				return nil
+			}
+			return errors.New("retry")
+		}); err != nil || attempts != 2 {
+			t.Fatal(err)
+		}
+	}
+	r = mustNew(t, Config{RetryAfter: func(error) (time.Duration, bool) { t.Fatal("delay called without retry permission"); return 0, true }})
+	r.Do(context.Background(), func(context.Context) error { return errors.New("do not repeat") })
+}

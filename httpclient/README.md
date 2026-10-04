@@ -68,11 +68,38 @@ resp, err := client.Do(ctx, httpclient.Request{
 })
 ```
 
-错误可用 `errors.As(err, &statusErr)` 和 `errors.Is(err, context.DeadlineExceeded)` 等判断。`StatusError` 仅包含 HTTP 状态码；API 的业务状态码由调用方解析。
+错误可用 `errors.As(err, &statusErr)` 和 `errors.Is(err, context.DeadlineExceeded)` 等判断。`StatusError` 包含 StatusCode、Method 和独立复制的 Headers；API 的业务状态码由调用方解析。非 2xx 同时发生读取失败或响应超限时通过 `errors.Join` 保留两类错误。Headers 可能包含敏感数据，不自动输出到 Error 或统一上报字段。
 
 `StatusError` 已实现统一错误接口，编码为 `httpclient.http_status`，上报字段包含 `http_status`。可直接传给 `apperror.Reporter.Capture`；`ErrResponseTooLarge` 等普通哨兵错误可在业务边界通过 `apperror.Wrap` 增加业务编码。适配方式见 [apperror](../apperror/README.md#已有模块适配)。
 
 本模块将响应读入内存，适合常规 API 调用。大文件下载、SSE 等流式响应应直接使用 `net/http`。自定义 Transport 若忽略请求 Context，模块无法强行中断它。
+
+## Retry-After 与读请求重试
+
+`StatusError.RetryDelay(now)` / `ParseRetryAfter(value, now)` 支持秒数和 HTTP 日期；过去日期返回零，非法值返回 false，超大秒数饱和到最大 Duration。只对明确可重复的读取组合 `retry`，默认不会重试写请求：
+
+```go
+r, err := retry.New(retry.Config{
+    MaxAttempts: 3,
+    RetryIf: func(err error) bool {
+        var status *httpclient.StatusError
+        return errors.As(err, &status) && status.Method == http.MethodGet &&
+            (status.StatusCode == 429 || status.StatusCode == 503)
+    },
+    RetryAfter: func(err error) (time.Duration, bool) {
+        var status *httpclient.StatusError
+        if errors.As(err, &status) { return status.RetryDelay(time.Now()) }
+        return 0, false
+    },
+})
+if err != nil { return err }
+err = r.Do(ctx, func(ctx context.Context) error {
+    _, err := client.DoJSON(ctx, http.MethodGet, endpoint, nil, &result)
+    return err
+})
+```
+
+总等待预算通过 Context 设置。Retry-After 不决定是否重试；等待不会因抖动或本地 MaxDelay 变短。响应头包含服务器原值，避免整体写入日志。
 
 ## 独立运行
 

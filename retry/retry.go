@@ -10,15 +10,16 @@ import (
 )
 
 type Config struct {
-	MaxAttempts  int              // includes the initial attempt; zero defaults to 3
-	InitialDelay time.Duration    // zero defaults to 100ms
-	MaxDelay     time.Duration    // zero defaults to 5s
-	Multiplier   float64          // zero defaults to 2; must be >= 1
-	Jitter       float64          // [0,1]; 0 disables jitter
-	RetryIf      func(error) bool // nil means no retries
+	MaxAttempts  int                               // includes the initial attempt; zero defaults to 3
+	InitialDelay time.Duration                     // zero defaults to 100ms
+	MaxDelay     time.Duration                     // zero defaults to 5s
+	Multiplier   float64                           // zero defaults to 2; must be >= 1
+	Jitter       float64                           // [0,1]; 0 disables jitter
+	RetryIf      func(error) bool                  // nil means no retries
+	RetryAfter   func(error) (time.Duration, bool) // optional minimum wait; never shortened by jitter/MaxDelay
 }
 
-// Retrier is immutable and safe to reuse concurrently if RetryIf is also safe.
+// Retrier is immutable and safe to reuse concurrently if callbacks are also safe.
 type Retrier struct{ cfg Config }
 
 func New(cfg Config) (*Retrier, error) {
@@ -62,7 +63,13 @@ func (r *Retrier) Do(ctx context.Context, operation func(context.Context) error)
 		if attempt >= r.cfg.MaxAttempts || r.cfg.RetryIf == nil || !r.cfg.RetryIf(err) {
 			return err
 		}
-		timer := time.NewTimer(r.jitter(delay))
+		wait := r.jitter(delay)
+		if r.cfg.RetryAfter != nil {
+			if minimum, ok := r.cfg.RetryAfter(err); ok && minimum > wait {
+				wait = minimum
+			}
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

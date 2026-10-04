@@ -9,6 +9,6 @@ vet:
 	@set -e; for module in $(MODULES); do (cd "$$module" && GOWORK=off go vet ./...); done
 
 integration:
-	go test -race ./tests/error_reporting_test.go
+	go test -race ./tests/*.go
 
 check: test vet integration

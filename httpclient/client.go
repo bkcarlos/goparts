@@ -48,7 +48,11 @@ type Response struct {
 	Body       []byte
 }
 
-type StatusError struct{ StatusCode int }
+type StatusError struct {
+	StatusCode int
+	Method     string
+	Headers    http.Header // independent copy; may contain sensitive server values
+}
 
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("httpclient: unexpected HTTP status %d", e.StatusCode)
@@ -118,18 +122,26 @@ func (c *Client) Do(ctx context.Context, input Request) (*Response, error) {
 	}
 	defer resp.Body.Close()
 	result := &Response{StatusCode: resp.StatusCode, Headers: resp.Header.Clone()}
+	var statusErr error
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr = &StatusError{StatusCode: resp.StatusCode, Method: req.Method, Headers: resp.Header.Clone()}
+	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
-		return result, fmt.Errorf("httpclient: read response: %w", withoutURL(err))
+		readErr := fmt.Errorf("httpclient: read response: %w", withoutURL(err))
+		if statusErr != nil {
+			return result, errors.Join(statusErr, readErr)
+		}
+		return result, readErr
 	}
 	if int64(len(data)) > c.maxResponseBytes {
+		if statusErr != nil {
+			return result, errors.Join(statusErr, ErrResponseTooLarge)
+		}
 		return result, ErrResponseTooLarge
 	}
 	result.Body = data
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return result, &StatusError{StatusCode: resp.StatusCode}
-	}
-	return result, nil
+	return result, statusErr
 }
 
 // DoJSON encodes input when non-nil and decodes a successful nonempty response
@@ -138,7 +150,9 @@ func (c *Client) Do(ctx context.Context, input Request) (*Response, error) {
 func (c *Client) DoJSON(ctx context.Context, method, endpoint string, input, output any) (*Response, error) {
 	if output != nil {
 		v := reflect.ValueOf(output)
-		if v.Kind() != reflect.Pointer || v.IsNil() { return nil, errors.New("httpclient: JSON output must be a non-nil pointer") }
+		if v.Kind() != reflect.Pointer || v.IsNil() {
+			return nil, errors.New("httpclient: JSON output must be a non-nil pointer")
+		}
 	}
 	req := Request{Method: method, URL: endpoint, Headers: make(http.Header)}
 	req.Headers.Set("Accept", "application/json")

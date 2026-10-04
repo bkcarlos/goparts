@@ -32,14 +32,17 @@ err = r.Do(ctx, func(ctx context.Context) error {
 | --- | --- |
 | `MaxAttempts` | 3，包含首次执行；设为 1 时只执行一次 |
 | `InitialDelay` | 100ms，第一次重试前等待 |
-| `MaxDelay` | 5s，包含抖动后的最大等待时间；不能小于 InitialDelay |
+| `MaxDelay` | 5s，包含抖动后的本地退避上限；不能小于 InitialDelay，不截断服务端 RetryAfter |
 | `Multiplier` | 2，最小为 1 |
 | `Jitter` | 0，关闭抖动；取值 0～1，0.2 表示围绕基础延迟上下浮动 20%，再受 MaxDelay 截断 |
 | `RetryIf` | nil 时不重试；只有明确返回 true 的错误才会重试 |
+| `RetryAfter` | 可选 `func(error) (time.Duration, bool)`，提供最短等待时间；取其与本地退避的较大值，不施加向下抖动 |
 
 每次尝试前检查 Context，等待期间也能取消。全部失败返回最后一次操作的原始错误，取消返回 `ctx.Err()`。最后一次失败后不会再次等待或调用 RetryIf。
 
-Retrier 配置不可变，可以并发复用；RetryIf 和传入操作的并发安全由调用者保证。模块不捕获 panic。
+Retrier 配置不可变，可以并发复用；回调和传入操作的并发安全由调用者保证。模块不捕获 panic。`RetryAfter` 只有在允许重试且仍有次数时调用；false 或负数忽略。服务端较长的等待由调用方 Context 约束，不通过 MaxDelay 缩短。
+
+HTTP 组合示例见 [Retry-After 与读请求重试](../httpclient/README.md#retry-after-与读请求重试)。
 
 业务操作必须正确使用传入 Context；若操作忽略 Context 并永久阻塞，重试模块无法强行打断。总执行时间由调用方 Context 约束。
 
