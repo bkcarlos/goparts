@@ -272,10 +272,14 @@ make test         # 各模块关闭 workspace，执行 go test -race -cover
 make vet          # 各模块关闭 workspace，执行 go vet
 make integration  # 使用 workspace 验证跨模块错误上报
 make check        # 执行以上全部检查
+make stress       # 关键并发测试重复 20 轮，包含竞态检测
+make fuzz         # Range 解析、LLM 工具参数各执行 10 秒模糊测试
 make vuln         # 需先安装 govulncheck；逐模块漏洞检查
 ```
 
 `-race` 需要当前平台支持竞态检测，并具备相应 CGO / C 编译工具链。`make integration` 需要启用本仓库的 `go.work`；若环境中设置了 `GOWORK=off`，运行前取消该覆盖或显式指定此文件。
+`make stress` 同样使用 workspace；可执行 `make stress STRESS_COUNT=100` 或
+`make fuzz FUZZTIME=1m` 延长检查。CI 另有 robustness 任务执行默认重复测试与模糊测试。
 
 单独验证一个模块：
 

@@ -42,3 +42,14 @@ jobs:
           go-version: stable
           cache: false
       - run: make integration
+  robustness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: make stress
+      - run: make fuzz

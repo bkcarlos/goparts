@@ -9,12 +9,19 @@ cache/redis 是可选嵌套模块，须单独测试和发布。ssh 与 cache/red
 
 ```sh
 make check
+# 并发状态、取消与关闭测试重复 20 轮，可用 STRESS_COUNT 调整：
+make stress
+# 两个解析入口分别执行 10 秒模糊测试，可用 FUZZTIME=1m 延长：
+make fuzz
 # 安装工具后额外检查可调用的漏洞：
 go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 make vuln
 ```
 
 测试应覆盖成功、取消、服务失败、输入边界和关键并发行为，不使用真实凭据，不自动发送通知。
+并发测试优先用通道同步和有界等待；错误路径应验证返回错误、未执行的副作用、原数据保留和资源清理。
+避免只检查“没有报错”，或通过固定 Sleep 猜测任务执行顺序。新增的 fuzz 种子随普通测试运行，
+CI robustness 任务另执行 `make stress` 和 `make fuzz`；fuzz 失败输入应保留为回归语料。
 加新模块时同时更新 Makefile、go.work、CI matrix、README 和 FEATURES。
 公共结构体用可选新增字段维持兼容；破坏性改变需主版本升级及迁移说明。
 
