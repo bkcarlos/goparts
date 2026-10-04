@@ -2,7 +2,7 @@
 
 面向 Go 服务的公共组件集合：日志、配置、HTTP、重试、生命周期、LLM、飞书和统一错误处理。**每个模块有独立的 `go.mod`，按需引用、分别初始化**，不需要创建全局 SDK 实例。
 
-当前要求 **Go 1.21+**，八个模块均仅依赖标准库，生产代码互不导入。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
+当前要求 **Go 1.21+**，八个模块的生产代码互不导入。`config` 为支持 YAML 引入 `go.yaml.in/yaml/v3`，其余模块仅依赖标准库。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
 
 仓库：[bkcarlos/goparts](https://github.com/bkcarlos/goparts)。各模块使用 `github.com/bkcarlos/goparts/<模块名>` 导入路径；当前尚未创建版本标签。
 
@@ -24,7 +24,7 @@
 | 需要的能力 | 导入路径 | 主要入口 | 接入文档 |
 | --- | --- | --- | --- |
 | JSON / 文本日志、动态级别、请求字段 | `github.com/bkcarlos/goparts/logger` | `New`、`WithContext`、`WithFields` | [logger](logger/README.md) |
-| 默认值、JSON 文件、环境变量、启动校验 | `github.com/bkcarlos/goparts/config` | `Load[T]` | [config](config/README.md) |
+| 默认值、JSON / YAML 文件、环境变量、启动校验 | `github.com/bkcarlos/goparts/config` | `Load[T]` | [config](config/README.md) |
 | HTTP / JSON 请求、连接复用、响应大小限制 | `github.com/bkcarlos/goparts/httpclient` | `New`、`Do`、`DoJSON` | [httpclient](httpclient/README.md) |
 | 指数退避、抖动、按错误判断是否重试 | `github.com/bkcarlos/goparts/retry` | `New`、`Do` | [retry](retry/README.md) |
 | 后台任务、退出信号、逆序资源清理 | `github.com/bkcarlos/goparts/lifecycle` | `New`、`Add`、`OnStop`、`RunSignals` | [lifecycle](lifecycle/README.md) |
@@ -148,7 +148,7 @@ GOWORK=off go run .
 
 ## 配置与默认值
 
-客户端配置由调用方传入；各组件不会自动加载业务配置文件。`config` 模块提供可选的加载流程：**结构体 default 标签 → JSON 文件 → env 标签 → 校验**。读取环境变量的示例程序和组件本身是分开的。
+客户端配置由调用方传入；各组件不会自动加载业务配置文件。`config` 模块提供可选的加载流程：**结构体 default 标签 → JSON / YAML 文件 → env 标签 → 校验**。`.yaml` / `.yml` 自动使用 YAML，也可显式传入 `FormatYAML`；YAML 时长可写为 `5s`。读取环境变量的示例程序和组件本身是分开的。
 
 | 配置项 | 默认值 | 覆盖方式 |
 | --- | --- | --- |
@@ -221,6 +221,7 @@ LLM 模块可配置兼容协议的 BaseURL 和模型名；对接 DeepSeek、通�
 | --- | --- | --- |
 | [日志](logger/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 本地 JSON 日志、请求字段、动态级别 |
 | [配置](config/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 默认值与环境变量加载 |
+| [YAML 配置](config/examples/basic/config.yaml) | `GOWORK=off go run ./examples/basic -config ./examples/basic/config.yaml` | YAML、可读时长、环境变量覆盖 |
 | [HTTP](httpclient/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 本地 HTTP 服务与 JSON 请求 |
 | [重试](retry/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 模拟临时失败后成功 |
 | [生命周期](lifecycle/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 后台任务启动后自动退出 |

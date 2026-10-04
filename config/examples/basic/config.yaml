@@ -1,0 +1,4 @@
+# Environment variables such as DEMO_PORT override these values.
+name: yaml-demo
+port: 9090
+timeout: 2s

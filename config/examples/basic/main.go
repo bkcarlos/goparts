@@ -11,9 +11,9 @@ import (
 )
 
 type AppConfig struct {
-	Name    string        `json:"name" default:"demo" env:"NAME" required:"true"`
-	Port    int           `json:"port" default:"8080" env:"PORT"`
-	Timeout time.Duration `json:"timeout" default:"5s" env:"TIMEOUT"`
+	Name    string        `json:"name" yaml:"name" default:"demo" env:"NAME" required:"true"`
+	Port    int           `json:"port" yaml:"port" default:"8080" env:"PORT"`
+	Timeout time.Duration `json:"timeout" yaml:"timeout" default:"5s" env:"TIMEOUT"`
 }
 
 func (c *AppConfig) Validate() error {
@@ -27,7 +27,7 @@ func (c *AppConfig) Validate() error {
 }
 
 func main() {
-	path := flag.String("config", "", "optional JSON config file")
+	path := flag.String("config", "", "optional JSON or YAML config file")
 	flag.Parse()
 	cfg, err := config.Load[AppConfig](config.Options{File: *path, EnvPrefix: "DEMO_"})
 	if err != nil {

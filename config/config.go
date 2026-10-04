@@ -1,4 +1,4 @@
-// Package config loads typed configuration from defaults, JSON and environment variables.
+// Package config loads typed configuration from defaults, JSON/YAML and environment variables.
 package config
 
 import (
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -16,8 +17,17 @@ import (
 
 const maxFileBytes = 1024 * 1024
 
+type Format string
+
+const (
+	FormatAuto Format = "" // .yaml/.yml select YAML; all other extensions retain JSON behavior
+	FormatJSON Format = "json"
+	FormatYAML Format = "yaml"
+)
+
 type Options struct {
-	File      string // optional JSON file; an explicitly supplied missing file is an error
+	File      string // optional JSON/YAML file; an explicitly supplied missing file is an error
+	Format    Format // default auto-detects from extension; explicit format overrides extension
 	EnvPrefix string
 	LookupEnv func(string) (string, bool) // nil uses os.LookupEnv
 }
@@ -25,11 +35,16 @@ type Options struct {
 // Validator optionally checks cross-field constraints after loading.
 type Validator interface{ Validate() error }
 
-// Load loads a struct T in order: default tags, JSON file, then env tags.
+// Load loads a struct T in order: default tags, JSON/YAML file, then env tags.
 // Nested value structs are supported. required:"true" rejects zero values.
 // A load failure returns the zero T; no partially loaded configuration is exposed.
 func Load[T any](opts Options) (T, error) {
 	var result, zero T
+	switch opts.Format {
+	case FormatAuto, FormatJSON, FormatYAML:
+	default:
+		return zero, errors.New("config: unsupported file format")
+	}
 	v := reflect.ValueOf(&result).Elem()
 	if v.Kind() != reflect.Struct {
 		return zero, errors.New("config: T must be a struct")
@@ -45,7 +60,7 @@ func Load[T any](opts Options) (T, error) {
 		return zero, err
 	}
 	if opts.File != "" {
-		if err := loadFile(opts.File, &result); err != nil {
+		if err := loadFile(opts.File, opts.Format, &result); err != nil {
 			return zero, err
 		}
 	}
@@ -86,7 +101,7 @@ func Load[T any](opts Options) (T, error) {
 	return result, nil
 }
 
-func loadFile(path string, target any) error {
+func loadFile(path string, format Format, target any) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("config: open file: %w", err)
@@ -98,6 +113,17 @@ func loadFile(path string, target any) error {
 	}
 	if len(data) > maxFileBytes {
 		return errors.New("config: file exceeds 1 MiB")
+	}
+	if format == FormatAuto {
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".yaml", ".yml":
+			format = FormatYAML
+		default:
+			format = FormatJSON
+		}
+	}
+	if format == FormatYAML {
+		return decodeYAML(data, target)
 	}
 	if !strings.HasPrefix(strings.TrimSpace(string(data)), "{") {
 		return errors.New("config: file must contain a JSON object")
