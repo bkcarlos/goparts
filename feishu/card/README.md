@@ -166,3 +166,18 @@ GOWORK=off go vet ./...
 测试覆盖请求协议、Token 缓存和刷新、并发与取消、业务错误和 HTTP 错误、无重试、重定向限制、卡片构建，以及回调验签、解密、伪造/过期请求和 URL 验证。尚未连接真实飞书应用进行端到端验证。
 
 协议参考：[JSON 2.0](https://open.feishu.cn/document/feishu-cards/card-json-v2-structure)、[创建实体](https://open.feishu.cn/document/cardkit-v1/card/create)、[流式更新](https://open.feishu.cn/document/uAjLw4CM/ukzMukzMukzM/feishu-cards/streaming-updates-openapi-overview)、[更新消息卡片](https://open.feishu.cn/document/server-docs/im-v1/message-card/patch)、[卡片回调](https://open.feishu.cn/document/feishu-cards/card-callback-communication)、[官方回调协议实现参考](https://github.com/larksuite/oapi-sdk-go/blob/v3_main/event/event.go)。本包独立实现协议，没有引入官方 SDK 或 CLI 依赖。
+
+### 旧卡片、共享 Token、成功后去重
+
+`card/legacy.New(title, legacy.Div(...), legacy.Action(...))` 生成 JSON 1.0，
+可直接传入 Send/UpdateMessage，不做隐式 1.0→2.0 迁移。
+`Config.TokenCache` 接收 GetOrLoad 接口；MemoryTokenCache 可由多个同进程 Client 共享，
+缓存 key 绑定应用、端点及凭据指纹。默认 nil 保留原来的每 Client 缓存。
+跨实例可自行实现 Redis GetOrLoad：必须用分布式锁覆盖检查、刷新和保存整个事务，
+缓存内容按 ExpiresAt 设置 TTL；锁失效不能继续无条件覆盖较新 token。
+MaxResponseBytes 可配，默认 2 MiB。
+
+`CallbackConfig.Deduper` 与 `decoder.Handler(fn)` 组合，验证签名/身份后才做去重。
+使用 `dedup.NewMemory(ttl, capacity)` 可合并并发相同 EventID，重放原成功响应，失败不缓存。
+单独 Decode 只做解码验证，不提前宣告业务成功。事件键含 AppID；默认 nil 不改变行为。
+去重容量耗尽返回错误而非悄悄重放业务。分布式实现接入 dedup.Store，同样必须保存响应。

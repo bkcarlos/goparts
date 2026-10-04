@@ -82,7 +82,14 @@ func (c *Client) CompleteLogin(ctx context.Context, auth DeviceAuthorization) (U
 	ctx, cancel := context.WithDeadline(ctx, auth.ExpiresAt)
 	defer cancel()
 	interval := auth.Interval
+	attempt := 0
 	for {
+		attempt++
+		if c.onPollTick != nil {
+			if err := c.onPollTick(ctx, PollTick{Attempt: attempt, Interval: interval, ExpiresAt: auth.ExpiresAt}); err != nil {
+				return UserInfo{}, err
+			}
+		}
 		if err := c.wait(ctx, interval); err != nil {
 			if !c.now().Before(auth.ExpiresAt) {
 				return UserInfo{}, ErrDeviceExpired
@@ -171,6 +178,13 @@ func (c *Client) AccessToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer c.unlock()
+	if c.refreshLocker != nil {
+		unlock, err := c.refreshLocker.Lock(ctx)
+		if err != nil {
+			return "", err
+		}
+		defer unlock()
+	}
 	if c.pending != nil {
 		if err := c.persist(ctx, *c.pending); err != nil {
 			return "", err

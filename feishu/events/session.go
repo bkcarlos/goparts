@@ -182,7 +182,25 @@ func (c *Client) handle(ctx context.Context, f frame) frame {
 		err = errProtocol
 	} else {
 		bounded, cancel := context.WithTimeout(ctx, c.cfg.HandlerTimeout)
-		response, err = c.cfg.Dispatcher.dispatch(bounded, e)
+		if c.cfg.Deduper == nil {
+			response, err = c.cfg.Dispatcher.dispatch(bounded, e)
+		} else {
+			var encoded []byte
+			encoded, err = c.cfg.Deduper.Do(bounded, c.cfg.AppID+":"+e.Header.EventID, func() ([]byte, error) {
+				value, err := c.cfg.Dispatcher.dispatch(bounded, e)
+				if err != nil {
+					return nil, err
+				}
+				b, err := marshalResponse(value)
+				if int64(len(b)) > c.cfg.MaxResponseBytes {
+					return nil, errors.New("feishu/events: handler response exceeds limit")
+				}
+				return b, err
+			})
+			if err == nil && len(encoded) > 0 {
+				response = json.RawMessage(encoded)
+			}
+		}
 		if err == nil {
 			err = bounded.Err()
 		}

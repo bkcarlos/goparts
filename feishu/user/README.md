@@ -167,3 +167,19 @@ GOWORK=off go vet ./...
 已使用本地模拟服务器验证授权等待/降速/拒绝、token 轮换、并发刷新、保存失败恢复、加密存储和文档请求；尚未使用真实应用完成授权联调。
 
 官方文档：[创建文档](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/create)、[读取纯文本](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/raw_content)、[获取所有块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/list)、[追加块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/create)、[更新块](https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document-block/patch)。
+
+### 多账号与刷新协调
+
+MultiMemoryStore 和 NewMultiEncryptedStore(dir,key) 以 open_id 隔离账户；每次读写
+校验 token 的 OpenID。加密版复用现有 AES-256-GCM 存储，key 仍由调用方从秘密管理系统
+提供，不把密码当密钥。NewManager 为每个账户缓存一个 Client。
+`AsUser(ctx,id)` / `AsApplication(ctx)` 明确选择身份，Manager.AccessToken 可注入
+Bitable/Wiki/Contact/attachment。未选择身份或用户令牌失败都不自动使用应用身份。
+通过 Manager.User(id) 完成指定账户的登录；实际登录账户不匹配时拒绝落盘。
+
+`Config.RefreshLocker` 可协调整个 Load→refresh→Save；多账号加密存储默认提供
+基于独占锁文件的 FileLocker。不同进程必须共享相同目录和加密 key，禁止绕过锁
+直接刷新。进程异常退出可能留下锁文件，确认无存活拥有者后由运维移除，程序不猜测
+过期锁，避免双重刷新。分布式部署可注入具有同等事务语义的 Locker。
+`OnPollTick(ctx, PollTick)` 在每轮等待前报告次数、间隔和到期时间，不包含 device code
+或 token；返回错误可终止登录。MaxResponseBytes 可配置，默认 8 MiB。

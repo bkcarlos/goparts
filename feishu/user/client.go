@@ -27,19 +27,25 @@ var ErrDeviceExpired = errors.New("feishu/user: device authorization expired")
 var ErrUnsupportedToken = errors.New("feishu/user: only Bearer tokens are supported")
 
 type Config struct {
-	AppID       string
-	AppSecret   string
-	Scopes      []string      // explicit document scopes; offline_access is added automatically
-	BaseURL     string        // defaults to DefaultBaseURL, includes /open-apis
-	AccountsURL string        // defaults to DefaultAccountsURL
-	Timeout     time.Duration // per HTTP request, default 15s; login has its own deadline
-	Store       TokenStore    // nil uses memory; one store/account per Client
-	HTTPClient  *http.Client  // copied; redirects disabled
+	OnPollTick       func(context.Context, PollTick) error
+	RefreshLocker    Locker
+	MaxResponseBytes int64 // zero retains the package default
+	AppID            string
+	AppSecret        string
+	Scopes           []string      // explicit document scopes; offline_access is added automatically
+	BaseURL          string        // defaults to DefaultBaseURL, includes /open-apis
+	AccountsURL      string        // defaults to DefaultAccountsURL
+	Timeout          time.Duration // per HTTP request, default 15s; login has its own deadline
+	Store            TokenStore    // nil uses memory; one store/account per Client
+	HTTPClient       *http.Client  // copied; redirects disabled
 }
 
 // Client is safe for concurrent document calls. Reuse a single Client for one
 // stored account, so rotating refresh tokens cannot race between callers.
 type Client struct {
+	onPollTick                             func(context.Context, PollTick) error
+	refreshLocker                          Locker
+	maxResponseBytes                       int64
 	appID, appSecret, baseURL, accountsURL string
 	scopes                                 []string
 	timeout                                time.Duration
@@ -54,6 +60,12 @@ type Client struct {
 func New(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.AppID) == "" || cfg.AppSecret == "" {
 		return nil, errors.New("feishu/user: AppID and AppSecret are required")
+	}
+	if cfg.MaxResponseBytes < 0 || cfg.MaxResponseBytes == int64(^uint64(0)>>1) {
+		return nil, errors.New("feishu: invalid response limit")
+	}
+	if cfg.MaxResponseBytes == 0 {
+		cfg.MaxResponseBytes = responseLimit
 	}
 	if cfg.Timeout < 0 {
 		return nil, errors.New("feishu/user: timeout must not be negative")
@@ -86,7 +98,7 @@ func New(cfg Config) (*Client, error) {
 		*hc = *cfg.HTTPClient
 	}
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{appID: cfg.AppID, appSecret: cfg.AppSecret, baseURL: strings.TrimRight(cfg.BaseURL, "/"), accountsURL: strings.TrimRight(cfg.AccountsURL, "/"), scopes: scopes, timeout: cfg.Timeout, http: hc, store: cfg.Store, gate: make(chan struct{}, 1), now: time.Now, wait: waitContext}, nil
+	return &Client{onPollTick: cfg.OnPollTick, refreshLocker: cfg.RefreshLocker, maxResponseBytes: cfg.MaxResponseBytes, appID: cfg.AppID, appSecret: cfg.AppSecret, baseURL: strings.TrimRight(cfg.BaseURL, "/"), accountsURL: strings.TrimRight(cfg.AccountsURL, "/"), scopes: scopes, timeout: cfg.Timeout, http: hc, store: cfg.Store, gate: make(chan struct{}, 1), now: time.Now, wait: waitContext}, nil
 }
 
 type APIError struct {
@@ -158,12 +170,12 @@ func (c *Client) send(ctx context.Context, method, endpoint, contentType string,
 		return nil, 0, nil, fmt.Errorf("feishu/user: HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
 		return nil, resp.StatusCode, resp.Header, fmt.Errorf("feishu/user: read response: %w", err)
 	}
-	if len(data) > responseLimit {
-		return nil, resp.StatusCode, resp.Header, errors.New("feishu/user: response exceeds 8 MiB")
+	if int64(len(data)) > c.maxResponseBytes {
+		return nil, resp.StatusCode, resp.Header, errors.New("feishu/user: response exceeds size limit")
 	}
 	return data, resp.StatusCode, resp.Header, nil
 }

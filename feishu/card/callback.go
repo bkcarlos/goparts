@@ -2,6 +2,7 @@ package card
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/bkcarlos/goparts/feishu/dedup"
 	"io"
 	"net/http"
 	"strconv"
@@ -21,6 +23,7 @@ var ErrInvalidCallback = errors.New("feishu/card: invalid or unauthenticated cal
 const callbackLimit = 1024 * 1024
 
 type CallbackConfig struct {
+	Deduper           dedup.Store
 	VerificationToken string
 	AppID             string
 	EncryptKey        string        // optional; configured callbacks require encrypted payloads and signed events
@@ -201,4 +204,42 @@ type CallbackResponse struct {
 func RawResponseCard(content any) *ResponseCard { return &ResponseCard{Type: "raw", Data: content} }
 func TemplateResponseCard(template TemplateData) *ResponseCard {
 	return &ResponseCard{Type: "template", Data: template}
+}
+
+// Handler verifies callbacks before optional deduplication and caches only
+// successful encoded responses. Failed callbacks can be retried by Feishu.
+func (d *CallbackDecoder) Handler(fn func(context.Context, *CallbackRequest) (*CallbackResponse, error)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		event, err := d.Decode(r)
+		if err != nil {
+			http.Error(w, "invalid callback", 400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if event.Challenge != "" {
+			json.NewEncoder(w).Encode(map[string]string{"challenge": event.Challenge})
+			return
+		}
+		run := func() ([]byte, error) {
+			if fn == nil {
+				return nil, errors.New("card: callback handler required")
+			}
+			response, err := fn(r.Context(), event)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(response)
+		}
+		var data []byte
+		if d.config.Deduper != nil {
+			data, err = d.config.Deduper.Do(r.Context(), d.config.AppID+":"+event.Header.EventID, run)
+		} else {
+			data, err = run()
+		}
+		if err != nil {
+			http.Error(w, "callback failed", 500)
+			return
+		}
+		w.Write(data)
+	})
 }

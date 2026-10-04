@@ -19,16 +19,20 @@ const responseLimit = 2 * 1024 * 1024
 var ErrInvalidResponse = errors.New("feishu/card: invalid response")
 
 type Config struct {
-	AppID      string
-	AppSecret  string
-	BaseURL    string        // includes /open-apis; defaults to DefaultBaseURL
-	Timeout    time.Duration // per HTTP request, defaults to 15 seconds
-	HTTPClient *http.Client  // copied; redirects disabled
+	TokenCache       TokenCache // nil retains per-client cache
+	MaxResponseBytes int64      // zero retains the package default
+	AppID            string
+	AppSecret        string
+	BaseURL          string        // includes /open-apis; defaults to DefaultBaseURL
+	Timeout          time.Duration // per HTTP request, defaults to 15 seconds
+	HTTPClient       *http.Client  // copied; redirects disabled
 }
 
 // Client supports self-built application bots using tenant_access_token.
 // Reuse it across goroutines to share the in-memory token cache.
 type Client struct {
+	cache                     TokenCache
+	maxResponseBytes          int64
 	appID, appSecret, baseURL string
 	timeout                   time.Duration
 	http                      *http.Client
@@ -41,6 +45,12 @@ type Client struct {
 func New(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.AppID) == "" || cfg.AppSecret == "" {
 		return nil, errors.New("feishu/card: AppID and AppSecret are required")
+	}
+	if cfg.MaxResponseBytes < 0 || cfg.MaxResponseBytes == int64(^uint64(0)>>1) {
+		return nil, errors.New("feishu: invalid response limit")
+	}
+	if cfg.MaxResponseBytes == 0 {
+		cfg.MaxResponseBytes = responseLimit
 	}
 	if cfg.Timeout < 0 {
 		return nil, errors.New("feishu/card: timeout must not be negative")
@@ -60,7 +70,7 @@ func New(cfg Config) (*Client, error) {
 		*hc = *cfg.HTTPClient
 	}
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{appID: cfg.AppID, appSecret: cfg.AppSecret, baseURL: strings.TrimRight(cfg.BaseURL, "/"), timeout: cfg.Timeout, http: hc, gate: make(chan struct{}, 1), now: time.Now}, nil
+	return &Client{cache: cfg.TokenCache, maxResponseBytes: cfg.MaxResponseBytes, appID: cfg.AppID, appSecret: cfg.AppSecret, baseURL: strings.TrimRight(cfg.BaseURL, "/"), timeout: cfg.Timeout, http: hc, gate: make(chan struct{}, 1), now: time.Now}, nil
 }
 
 type APIError struct {
@@ -81,6 +91,19 @@ func (c *Client) AccessToken(ctx context.Context) (string, error) {
 }
 
 func (c *Client) accessToken(ctx context.Context) (string, error) {
+	if ctx == nil {
+		return "", errors.New("card: context required")
+	}
+	if c.cache != nil {
+		token, err := c.cache.GetOrLoad(ctx, c.cacheKey(), func(ctx context.Context) (CachedToken, error) {
+			value, err := c.localAccessToken(ctx)
+			return CachedToken{Value: value, ExpiresAt: c.expires}, err
+		})
+		return token.Value, err
+	}
+	return c.localAccessToken(ctx)
+}
+func (c *Client) localAccessToken(ctx context.Context) (string, error) {
 	if ctx == nil {
 		return "", errors.New("feishu/card: context is required")
 	}
@@ -144,12 +167,12 @@ func (c *Client) request(ctx context.Context, method, path, token string, input 
 		return nil, fmt.Errorf("feishu/card: HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("feishu/card: read response: %w", err)
 	}
-	if len(data) > responseLimit {
-		return nil, errors.New("feishu/card: response exceeds 2 MiB")
+	if int64(len(data)) > c.maxResponseBytes {
+		return nil, errors.New("feishu/card: response exceeds size limit")
 	}
 	var envelope struct {
 		Code *int   `json:"code"`

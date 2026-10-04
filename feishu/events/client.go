@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bkcarlos/goparts/feishu/dedup"
 	"io"
 	"math"
 	"math/rand"
@@ -27,6 +28,7 @@ const DefaultMaxResponseBytes int64 = 1024 * 1024
 var ErrAlreadyRunning = errors.New("feishu/events: client already running")
 
 type Config struct {
+	Deduper                                        dedup.Store
 	AppID, AppSecret                               string
 	Dispatcher                                     *Dispatcher
 	BaseURL                                        string // origin, WITHOUT /open-apis

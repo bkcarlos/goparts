@@ -96,3 +96,7 @@ GOWORK=off go run ./examples/events
 真实示例读取 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，Ctrl+C 退出。没有替用户执行真实应用联调；权限、订阅和业务幂等仍需在实际环境验证。
 
 传输依赖 `github.com/gorilla/websocket v1.5.3`；二进制字段使用 `google.golang.org/protobuf/encoding/protowire v1.36.0`，保留 Go 1.21 支持。协议参考 [飞书官方 SDK 的 ws 实现](https://github.com/larksuite/oapi-sdk-go/tree/99927aa13e271ea9fe03591204aad7bc6a2d869c/ws) 和 [事件订阅配置](https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case)。
+
+`Config.Deduper` 可注入 `feishu/dedup.Store`。去重键为 AppID+EventID，
+仅保存成功、未超时且限长的回调响应，重投递返回相同 ACK Data；失败仍可重试。
+默认 nil 保持原行为。内存实现适合同进程；多实例须共享分布式实现。

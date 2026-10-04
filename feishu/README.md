@@ -122,3 +122,24 @@ GOWORK=off go vet ./...
 安装与本地联调方式见[接入指南](../README.md#接入业务项目)。
 
 协议参考：[飞书自定义机器人指南](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot)。
+
+### 业务 API 与身份
+
+新增独立子包 bitable（表 CRUD、批量记录创建/更新/搜索、字段 CRUD）、wiki
+（Wiki 节点与真实 Bitable token 解析）、contact（邮箱/手机批量查询用户 ID）。
+统一 `Config{TokenProvider, BaseURL, Timeout, MaxResponseBytes, HTTPClient}`，
+默认响应限 4 MiB；分页显式传 PageSize/PageToken，结果含 HasMore/PageToken。
+字段类型和复杂筛选使用自己的类型或 RawMessage，不引入飞书完整 SDK。
+Drive/media 上传继续使用 attachment 包。接口写入只尝试一次，不隐式重放。
+
+```go
+identity, _ := user.NewManager(userConfig, multiStore, appClient.AccessToken)
+base, _ := bitable.New(bitable.Config{TokenProvider: identity.AccessToken})
+ctx := user.AsUser(context.Background(), "ou_example")
+page, err := base.ListTables(ctx, "app_token", bitable.Page{PageSize:100})
+```
+
+Scopes 和资源授权由调用者在飞书后台开通。Wiki URL 只提取 token，不向 URL 主机发凭据。
+官方协议参考：[Bitable](https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/search)、
+[Wiki](https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/get_node)、
+[Contact](https://open.feishu.cn/document/server-docs/contact-v3/user/batch_get_id)。

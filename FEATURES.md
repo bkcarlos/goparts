@@ -14,8 +14,8 @@
 | 限流、熔断、有界任务池、按 key 串行 | 已实现，测试通过 |
 | TTL/文件缓存、singleflight、持久化更新缓存 | 已实现，测试通过 |
 | metrics 接口与 OTel 适配、组件观测钩子 | 已实现，测试通过 |
-| Bitable/Wiki/Contact 业务 API、旧版卡片 | 待实现 |
-| 多用户会话、身份选择、登录轮询、TokenCache 与事件去重 | 待实现 |
+| Bitable/Wiki/Contact 业务 API、旧版卡片 | 已实现，测试通过 |
+| 多用户会话、身份选择、登录轮询、TokenCache 与事件去重 | 已实现，测试通过 |
 | LLM Responses 普通/流式 | 已实现，测试通过 |
 | LLM 会话、工具注册/校验/调度、聚合节流、Sequence | 已实现，测试通过 |
 | HTTP Range 分片/续传、存储目录操作、MD5 | 待实现 |
