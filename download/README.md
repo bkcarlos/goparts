@@ -1,0 +1,60 @@
+# 通用流式下载
+
+独立 module：`github.com/bkcarlos/goparts/download`，Go 1.21+，只使用标准库。数据源实现 `Source.Open(ctx)`，下载器统一处理流式落盘、大小限制、SHA-256、进度和发布目标文件；HTTP 或对象存储都可接入。
+
+## HTTP 下载
+
+```go
+source, err := download.NewHTTPSource(url, download.HTTPConfig{
+    // Headers: http.Header{"Authorization": {"Bearer " + token}},
+})
+if err != nil { return err }
+client, err := download.New(download.Config{
+    // Timeout: 30 * time.Minute,
+    // MaxBytes: 10 * 1024 * 1024 * 1024,
+})
+if err != nil { return err }
+result, err := client.Fetch(ctx, source, "./app.zip", download.Options{
+    SHA256: expectedSHA256, // 为空时只计算，不与预期值比较
+    OnProgress: func(written, total int64) error { return nil },
+})
+```
+
+成功结果包含 Path、Bytes、SHA256。HTTP 默认只接受 200 完整响应，不跟随重定向，拒绝 Range / If-Range 输入和意外内容编码，避免将部分文件当作完整下载。Header 初始化时复制；错误文本和统一错误字段不含带凭据 URL 或响应正文。
+
+## 对象存储下载
+
+业务组合 `storage.Client`，download 本身不导入 storage 或任意云 SDK：
+
+```go
+// store 可以是阿里云适配器，也可以是后续实现的其他供应商。
+source := download.SourceFunc(func(ctx context.Context) (download.Stream, error) {
+    reader, err := store.Get(ctx, "releases/app.zip", storage.GetOptions{})
+    if err != nil { return download.Stream{}, err }
+    return download.Stream{Body: reader, Size: reader.Length}, nil
+})
+result, err := client.Fetch(ctx, source, "./app.zip", download.Options{
+    SHA256: expectedSHA256,
+})
+```
+
+适配任意数据源只需返回 `io.ReadCloser` 和字节数（未知为 -1）；下载器负责 Close。Source 必须遵守 Context，不能忽略取消后永久阻塞。多次下载时每次 Open 都应创建新流。
+
+## 执行语义和配置
+
+- 默认总超时 30 分钟，最大文件 10 GiB，缓冲区 64 KiB；通过 Timeout、MaxBytes、BufferSize 配置，零使用默认值、负值无效，缓冲区最大 16 MiB。整个下载流受同一 Context 管理。
+- 只在目标同目录创建权限 0600 的随机临时文件，读取完成、长度与校验通过、流关闭和文件同步成功后才发布；失败清理临时文件，已有目标文件保持不变。
+- 默认禁止覆盖，通过硬链接原子发布，能够检测检查后出现的竞争写入；文件系统不支持硬链接时直接返回错误，不退化成有覆盖风险的操作。`Overwrite:true` 使用同目录 rename 替换，遵循运行平台的文件系统语义。
+- 目标父目录必须存在，且由可信调用方管理。不会创建任意目录或使用远端文件名推导本地路径；不接受已有非普通文件作为覆盖目标。
+- Progress 表示已写临时文件的字节数，total=-1 表示未知；100% 不代表最终校验/发布已经完成。回调错误中止下载，应快速返回。取消无法强行打断不遵守 Context 的自定义 Reader/回调。
+- `ErrTooLarge`、`ErrSizeMismatch`、`ErrChecksum`、`ErrExists` 可用 errors.Is 判断。HTTP 错误可 errors.As 为 `*HTTPError`，统一上报编码 `download.http_failed`。
+- 当前为单流完整下载，不提供 HTTP Range 分片调度、断点续传或自动重试。重新尝试会新开流并重新下载，不复用失败的临时文件。SHA-256 用于内容校验；云存储 ETag 不能直接充当 SHA-256/MD5。
+
+## 测试
+
+```sh
+GOWORK=off go test -race ./...
+GOWORK=off go vet ./...
+```
+
+本地测试覆盖 HTTP/任意 Source、校验、大小、取消、进度错误、竞争写入和失败文件清理；不访问真实云服务。

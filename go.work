@@ -9,4 +9,6 @@ use (
 	./llm
 	./logger
 	./retry
+	./storage
+	./download
 )

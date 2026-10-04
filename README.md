@@ -1,8 +1,8 @@
 # goparts
 
-面向 Go 服务的公共组件集合：日志、配置、HTTP、重试、生命周期、LLM、飞书和统一错误处理。**每个模块有独立的 `go.mod`，按需引用、分别初始化**，不需要创建全局 SDK 实例。
+面向 Go 服务的公共组件集合：日志、配置、HTTP、重试、生命周期、LLM、飞书、统一错误处理、对象存储与下载。**每个模块有独立的 `go.mod`，按需引用、分别初始化**，不需要创建全局 SDK 实例。
 
-当前要求 **Go 1.21+**，八个模块的生产代码互不导入。`config` 使用 `go.yaml.in/yaml/v3` 支持 YAML；`feishu/events` 使用 Gorilla WebSocket 和 Protobuf wire 编码支持长连接；其他模块仅使用标准库。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
+当前要求 **Go 1.21+**，十个模块的生产代码互不导入。`config` 使用 `go.yaml.in/yaml/v3`；`feishu/events` 使用 Gorilla WebSocket 和 Protobuf wire 编码；`storage/aliyun` 使用阿里云 OSS Go SDK v2。其余模块只使用标准库，`storage` 根包也不导入云 SDK。`go.work` 用于本仓库开发，业务项目可以单独引入任意模块。
 
 仓库：[bkcarlos/goparts](https://github.com/bkcarlos/goparts)。各模块使用 `github.com/bkcarlos/goparts/<模块名>` 导入路径；当前尚未创建版本标签。
 
@@ -36,6 +36,8 @@
 | 聊天附件、云空间文件、文档素材上传 | `github.com/bkcarlos/goparts/feishu/attachment` | `New`、`UploadChatPath`、`UploadDrivePath`、`UploadMediaPath` | [附件](feishu/attachment/README.md) |
 | 长连接消息、卡片和机器人入群事件 | `github.com/bkcarlos/goparts/feishu/events` | `NewDispatcher`、`New`、`Run` | [长连接](feishu/events/README.md) |
 | 编码错误、错误链、业务扩展、统一上报 | `github.com/bkcarlos/goparts/apperror` | `New`、`Wrap`、`Describe`、`NewReporter` | [apperror](apperror/README.md) |
+| 通用对象存储、阿里云 OSS 适配 | `github.com/bkcarlos/goparts/storage` | `New`、`PutFile`、`Get`、`List`、`PresignGet` | [storage](storage/README.md) |
+| HTTP / 任意数据源流式下载与校验 | `github.com/bkcarlos/goparts/download` | `New`、`NewHTTPSource`、`Fetch` | [download](download/README.md) |
 
 `feishu/user`、`feishu/card`、`feishu/attachment` 和 `feishu/events` 是同一个 Feishu module 下的独立子包，使用各自的配置和客户端。模块间通过参数、回调和小接口组合：例如业务加载配置后传给客户端，把 LLM 流交给卡片接口，把错误记录交给日志或通知出口。
 
@@ -237,6 +239,8 @@ LLM 模块可配置兼容协议的 BaseURL 和模型名；对接 DeepSeek、通�
 | [飞书用户文档](feishu/examples/userdocs_mock/main.go) | `GOWORK=off go run ./examples/userdocs_mock` | 本地模拟授权、刷新和文档读写 |
 | [飞书卡片](feishu/examples/cards_mock/main.go) | `GOWORK=off go run ./examples/cards_mock` | 本地模拟发送、更新和回调 |
 | [飞书附件](feishu/examples/attachments_mock/main.go) | `GOWORK=off go run ./examples/attachments_mock` | 本地模拟聊天上传/发送、用户云空间上传/文档附件关联 |
+| [对象存储](storage/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 本地模拟阿里云上传、读取，使用通用 Client |
+| [通用下载](download/examples/basic/main.go) | `GOWORK=off go run ./examples/basic` | 本地 HTTP 下载和 SHA-256 计算 |
 
 真实调用入口需要显式配置并执行：
 
@@ -284,6 +288,8 @@ goparts/
 ├── lifecycle/
 ├── llm/
 ├── apperror/
+├── storage/      # 通用接口，aliyun/ 为首个供应商适配器
+├── download/     # 通过 Source 接入 HTTP 或对象存储，不依赖云 SDK
 ├── feishu/
 │   ├── go.mod
 │   ├── user/     # 用户授权和文档子包，共用 feishu 的 go.mod
@@ -307,7 +313,9 @@ goparts/
 | 需求 | 当前状态 |
 | --- | --- |
 | YAML 配置（#2） | 已支持 `.yaml/.yml`、格式选择、严格字段校验和时长字符串；多文件合并、embed、嵌套指针遍历仍未实现 |
-| HTTP 标准状态错误及统一上报（#1/#2） | 已有 `StatusError` 和 `apperror` 适配；错误中尚无 Headers、Retry-After、Method 或受控 Body 预览 |
+| HTTP 标准状态错误及统一上报（#1/#2） | 已有 StatusCode、Method、独立 Headers、Retry-After 解析和 `apperror` 适配；受控 Body 预览尚未实现 |
+| Retry-After 与跨模块组合（#1/#2） | 已支持服务端最短等待、GET 重试示例，以及 HTTP + retry + apperror + logger 集成测试 |
+| 对象存储与下载（#3） | 已有通用 Backend、阿里云普通/分片上传、范围读取/分页/签名，以及供应商无关的单流下载、校验和原子发布；尚无其他供应商适配、目录批量上传和下载断点续传 |
 | 飞书附件上传（#1） | 已有聊天、Drive 文件、文档素材上传；docx 文件块关联已实现，多维表记录附件字段回填仍需业务 API |
 | 飞书长连接（#1） | 已有鉴权、心跳、重连、分片、消息/卡片/机器人入群事件和应答；跨实例去重与真实应用联调仍待补齐 |
 | 自定义配置校验（#1） | 已支持顶层 `Validate()`；通用标签校验器和嵌套 Validator 遍历尚未实现 |
@@ -320,7 +328,7 @@ goparts/
 | JSON 1.0 卡片 | 需要独立旧版构造器或明确范围的迁移工具；现有构造器是 JSON 2.0 |
 | LLM Responses | 尚无 `/responses` 请求模型、previous_response_id、reasoning 与对应 SSE 事件解析 |
 | 多用户身份与存储 | `user.Client` / `TokenStore` 按单账号使用；需多用户索引、会话选择及安全的刷新协调，不能把用户鉴权失败静默替换为应用身份 |
-| HTTP 重试与诊断 | 给出读请求重试组合入口/示例，扩充 StatusError；写请求仍需显式判断幂等，Body 预览需要大小和敏感信息控制 |
+| HTTP 重试与诊断 | 读请求组合示例和 StatusError 元数据已补齐；受控 Body 预览待实现，写请求仍需显式判断幂等 |
 | 配置、生命周期、组合错误 | 通用 URL/枚举/正则校验，任务独立退出预算/分阶段清理，`errors.Join` 全分支错误描述 |
 | 稳定发布 | 多模块版本标签和可固定版本的接入示例 |
 
@@ -328,27 +336,27 @@ goparts/
 
 | 建议阶段 | 待完善项 |
 | --- | --- |
-| 优先补现有模块 | `retry` 的 Retry-After 延迟策略；`httpclient` 的 Headers / Retry-After 错误透传；`apperror` 的 HTTP/退出码映射；`logger` 的字段脱敏 |
+| 优先补现有模块 | Retry-After 和 HTTP 错误透传已完成；剩余 `apperror` 的 HTTP/退出码映射与 `logger` 字段脱敏 |
 | 服务基础组件 | 独立 `middleware`（RequestID、访问日志、Recover、Timeout、CORS、Bearer、BodyLimit），限流与熔断，有界任务池与按 key 顺序执行 |
 | 缓存与多实例 | TTL/文件缓存、Load-or-fetch；飞书 TokenCache、刷新协调和回调去重。缓存接口本身不能代替跨进程刷新锁 |
 | 配置增强 | embed 默认层、多文件合并/注册表、嵌套指针和嵌套 Validate；YAML 加载已经完成 |
 | LLM 应用层 | 会话裁剪、工具注册与校验/调度、流式文本聚合与节流、卡片 Sequence 分配及串行更新 |
 | 可观测性 | metrics 接口与可选适配器、HTTP 请求/响应钩子、受控 trace 输出；日志/trace 需配合脱敏 |
 | 使用便利性 | 可注入重试随机源、用户登录轮询回调、结构化错误属性；保持现有 Go 1.21 基线与错误接口兼容 |
-| 工程建设 | LICENSE、CI 模块矩阵和漏洞检查、CHANGELOG / CONTRIBUTING / 版本标签，以及 HTTP + retry + apperror + logger 的组合测试 |
+| 工程建设 | LICENSE、CI 模块矩阵和漏洞检查、CHANGELOG / CONTRIBUTING / 版本标签；HTTP + retry + apperror + logger、storage + download 组合测试已增加 |
 
 ### 下游 common 替换：[#3 add new feat3](https://github.com/bkcarlos/goparts/issues/3)
 
-该 issue 的重点是制品和部署能力，与当前服务组件的定位不同。仍缺少：
+该 issue 的重点是制品和部署能力，与当前服务组件的定位不同。对象存储已按供应商无关接口落地，下载也已独立封装。仍缺少：
 
-- **存储与发布**：OSS（含分片、目录操作、签名）、版本发布/更新及存储抽象、制品库客户端。
-- **连接与文件传输**：SSH/SFTP、多主机和连接池、普通/Range 下载、断点续传。
+- **存储与发布**：对象存储目录批量操作/其他供应商适配、版本发布/更新、制品库客户端；阿里云分片与签名已支持。
+- **连接与文件传输**：SSH/SFTP、多主机和连接池、下载 Range 分片调度与断点续传；单流下载和 OSS 范围读取已支持。
 - **通用数据与文件工具**：持久化缓存、并发安全/有序 Map、文件树过滤、压缩/格式化/跨平台磁盘空间等工具。
 - **旧 API 兼容**：logger 的全局函数/旧接口/文件输出，retry 的函数式入口与预设，errx Registry/guidance 到 apperror 的迁移层。
 
 建议先保留下游的制品/部署包，按调用方实际需要逐项迁移；不应为了同名替换直接将所有业务专用 API 加入通用模块。旧 API 的兼容范围需要结合下游源码确认。
 
-下一批建议先实现 **Retry-After + HTTP 错误透传**，随后补 **Bitable / Wiki / Contact** 和 **LLM Responses**；每批包含实现、针对性测试、README 和独立提交。上述清单是待办范围，不表示已有这些功能，也不替代真实服务端的联调验收。
+下一批建议补 **Bitable / Wiki / Contact**、**LLM Responses** 和 **日志脱敏/错误码映射**；每批包含实现、针对性测试、README 和独立提交。对象存储当前按需求只实现阿里云，其他供应商通过同一 Backend 接口扩展。上述待办不替代真实服务端的联调验收。
 
 ## 常见问题
 

@@ -72,7 +72,7 @@ resp, err := client.Do(ctx, httpclient.Request{
 
 `StatusError` 已实现统一错误接口，编码为 `httpclient.http_status`，上报字段包含 `http_status`。可直接传给 `apperror.Reporter.Capture`；`ErrResponseTooLarge` 等普通哨兵错误可在业务边界通过 `apperror.Wrap` 增加业务编码。适配方式见 [apperror](../apperror/README.md#已有模块适配)。
 
-本模块将响应读入内存，适合常规 API 调用。大文件下载、SSE 等流式响应应直接使用 `net/http`。自定义 Transport 若忽略请求 Context，模块无法强行中断它。
+本模块将响应读入内存，适合常规 API 调用。大文件下载可使用独立 [download 模块](../download/README.md)，SSE 等流式响应使用 `net/http` 或对应客户端。自定义 Transport 若忽略请求 Context，模块无法强行中断它。
 
 ## Retry-After 与读请求重试
 

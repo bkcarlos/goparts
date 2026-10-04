@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bkcarlos/goparts/apperror"
+	"github.com/bkcarlos/goparts/download"
 	"github.com/bkcarlos/goparts/feishu"
 	"github.com/bkcarlos/goparts/feishu/attachment"
 	"github.com/bkcarlos/goparts/feishu/card"
@@ -16,6 +17,7 @@ import (
 	"github.com/bkcarlos/goparts/feishu/user"
 	"github.com/bkcarlos/goparts/httpclient"
 	"github.com/bkcarlos/goparts/llm"
+	"github.com/bkcarlos/goparts/storage"
 )
 
 // This workspace-only test keeps the production modules dependency-free.
@@ -25,6 +27,8 @@ func TestModuleErrorsCanBeReportedWithoutConversion(t *testing.T) {
 		code, key, value string
 	}{
 		{&httpclient.StatusError{StatusCode: 503}, "httpclient.http_status", "http_status", "503"},
+		{&storage.Error{Provider: "aliyun", Operation: "get", Code: "AccessDenied", StatusCode: 403, Cause: errors.New("provider-secret")}, "storage.operation_failed", "provider", "aliyun"},
+		{&download.HTTPError{StatusCode: 503, Cause: errors.New("provider-secret")}, "download.http_failed", "http_status", "503"},
 		{&llm.APIError{StatusCode: 429, Code: "rate_limit", Message: "provider-secret", RequestID: "req-1"}, "llm.api_error", "upstream_code", "rate_limit"},
 		{&feishu.APIError{Code: 999, Message: "provider-secret"}, "feishu.webhook_api_error", "upstream_code", "999"},
 		{&feishu.HTTPError{StatusCode: 502}, "feishu.http_status", "http_status", "502"},

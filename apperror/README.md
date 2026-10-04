@@ -180,6 +180,8 @@ sink := apperror.SinkFunc(func(ctx context.Context, record apperror.Record) erro
 | 原有类型 | 统一编码 |
 | --- | --- |
 | `httpclient.StatusError` | `httpclient.http_status` |
+| `storage.Error` | `storage.operation_failed` |
+| `download.HTTPError` | `download.http_failed` |
 | `llm.APIError` | `llm.api_error` |
 | `feishu.APIError` | `feishu.webhook_api_error` |
 | `feishu.HTTPError` | `feishu.http_status` |
