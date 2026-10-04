@@ -17,6 +17,7 @@
 - [示例入口](#示例入口)
 - [开发与验证](#开发与验证)
 - [目录与发布](#目录与发布)
+- [远程 issues 与待完善事项](#远程-issues-与待完善事项)
 - [常见问题](#常见问题)
 
 ## 模块选型
@@ -296,6 +297,58 @@ goparts/
 ```
 
 每个模块分别管理版本。在当前多模块仓库中发布时，标签需包含模块目录前缀，例如 `logger/v0.1.0`、`feishu/v0.1.0`；Feishu 的 user/card/attachment/events 子包随 feishu 模块一起发布。当前只推送源码，尚未创建发布标签。`go.work` 和本地 `replace` 不会替代已发布模块的依赖声明。
+
+## 远程 issues 与待完善事项
+
+以下是 2026-10-04 对远程三个未关闭 issues 与当前代码的核对。每个 issue 都包含多项需求，部分完成不代表整个 issue 已解决；代码提交与验收应继续按独立功能分批进行。
+
+### 已完成或已有基础
+
+| 需求 | 当前状态 |
+| --- | --- |
+| YAML 配置（#2） | 已支持 `.yaml/.yml`、格式选择、严格字段校验和时长字符串；多文件合并、embed、嵌套指针遍历仍未实现 |
+| HTTP 标准状态错误及统一上报（#1/#2） | 已有 `StatusError` 和 `apperror` 适配；错误中尚无 Headers、Retry-After、Method 或受控 Body 预览 |
+| 飞书附件上传（#1） | 已有聊天、Drive 文件、文档素材上传；docx 文件块关联已实现，多维表记录附件字段回填仍需业务 API |
+| 飞书长连接（#1） | 已有鉴权、心跳、重连、分片、消息/卡片/机器人入群事件和应答；跨实例去重与真实应用联调仍待补齐 |
+| 自定义配置校验（#1） | 已支持顶层 `Validate()`；通用标签校验器和嵌套 Validator 遍历尚未实现 |
+
+### 迁移接入需求：[#1 add new feat](https://github.com/bkcarlos/goparts/issues/1)
+
+| 待完善项 | 缺口与边界 |
+| --- | --- |
+| Bitable / Wiki / Contact | 表、记录批量操作/搜索、字段 CRUD；Wiki 节点解析；按邮箱批量查询用户 ID。附件上传本身已在 `attachment` 中实现 |
+| JSON 1.0 卡片 | 需要独立旧版构造器或明确范围的迁移工具；现有构造器是 JSON 2.0 |
+| LLM Responses | 尚无 `/responses` 请求模型、previous_response_id、reasoning 与对应 SSE 事件解析 |
+| 多用户身份与存储 | `user.Client` / `TokenStore` 按单账号使用；需多用户索引、会话选择及安全的刷新协调，不能把用户鉴权失败静默替换为应用身份 |
+| HTTP 重试与诊断 | 给出读请求重试组合入口/示例，扩充 StatusError；写请求仍需显式判断幂等，Body 预览需要大小和敏感信息控制 |
+| 配置、生命周期、组合错误 | 通用 URL/枚举/正则校验，任务独立退出预算/分阶段清理，`errors.Join` 全分支错误描述 |
+| 稳定发布 | 多模块版本标签和可固定版本的接入示例 |
+
+### 通用组件能力：[#2 add new feat2](https://github.com/bkcarlos/goparts/issues/2)
+
+| 建议阶段 | 待完善项 |
+| --- | --- |
+| 优先补现有模块 | `retry` 的 Retry-After 延迟策略；`httpclient` 的 Headers / Retry-After 错误透传；`apperror` 的 HTTP/退出码映射；`logger` 的字段脱敏 |
+| 服务基础组件 | 独立 `middleware`（RequestID、访问日志、Recover、Timeout、CORS、Bearer、BodyLimit），限流与熔断，有界任务池与按 key 顺序执行 |
+| 缓存与多实例 | TTL/文件缓存、Load-or-fetch；飞书 TokenCache、刷新协调和回调去重。缓存接口本身不能代替跨进程刷新锁 |
+| 配置增强 | embed 默认层、多文件合并/注册表、嵌套指针和嵌套 Validate；YAML 加载已经完成 |
+| LLM 应用层 | 会话裁剪、工具注册与校验/调度、流式文本聚合与节流、卡片 Sequence 分配及串行更新 |
+| 可观测性 | metrics 接口与可选适配器、HTTP 请求/响应钩子、受控 trace 输出；日志/trace 需配合脱敏 |
+| 使用便利性 | 可注入重试随机源、用户登录轮询回调、结构化错误属性；保持现有 Go 1.21 基线与错误接口兼容 |
+| 工程建设 | LICENSE、CI 模块矩阵和漏洞检查、CHANGELOG / CONTRIBUTING / 版本标签，以及 HTTP + retry + apperror + logger 的组合测试 |
+
+### 下游 common 替换：[#3 add new feat3](https://github.com/bkcarlos/goparts/issues/3)
+
+该 issue 的重点是制品和部署能力，与当前服务组件的定位不同。仍缺少：
+
+- **存储与发布**：OSS（含分片、目录操作、签名）、版本发布/更新及存储抽象、制品库客户端。
+- **连接与文件传输**：SSH/SFTP、多主机和连接池、普通/Range 下载、断点续传。
+- **通用数据与文件工具**：持久化缓存、并发安全/有序 Map、文件树过滤、压缩/格式化/跨平台磁盘空间等工具。
+- **旧 API 兼容**：logger 的全局函数/旧接口/文件输出，retry 的函数式入口与预设，errx Registry/guidance 到 apperror 的迁移层。
+
+建议先保留下游的制品/部署包，按调用方实际需要逐项迁移；不应为了同名替换直接将所有业务专用 API 加入通用模块。旧 API 的兼容范围需要结合下游源码确认。
+
+下一批建议先实现 **Retry-After + HTTP 错误透传**，随后补 **Bitable / Wiki / Contact** 和 **LLM Responses**；每批包含实现、针对性测试、README 和独立提交。上述清单是待办范围，不表示已有这些功能，也不替代真实服务端的联调验收。
 
 ## 常见问题
 
